@@ -1,6 +1,6 @@
-﻿# Enterprise Portal Frontend Template (`Template_Automation_Front`)
+# Travel Management Dashboard Frontend
 
-Enterprise web frontend starter template for ZenaTech internal applications. Built with **React 19**, **TypeScript**, **Vite 8**, **Tailwind CSS v4**, and **shadcn/ui**. Features a responsive AppShell layout, Microsoft Entra ID authentication, RBAC management views, audit log inspectors, and real-time SSE telemetry.
+Frontend web application for the ZenaTech Travel Management Portal. Built with **React 19**, **TypeScript**, **Vite 8**, **Tailwind CSS v4**, and **shadcn/ui**. Features a responsive AppShell layout, Microsoft Entra ID authentication, RBAC management views, audit log inspectors, and real-time SSE telemetry.
 
 ---
 
@@ -88,7 +88,7 @@ flowchart TD
 ## Directory Structure
 
 ```text
-Template_Automation_Front/
+internal_portal_travel_management_frontend/
 ├── public/                 # Static assets, branding, and icons
 ├── src/
 │   ├── components/         # Shared UI components
