@@ -132,5 +132,31 @@ export const travelService = {
   // Real-Time Budgeting & Pre-Trip Forecast
   getRealtimeBudgetForecast: () =>
     apiClient.get<import("@/types/travel").RealtimeBudgetForecast>("/api/travel/budgets/realtime-forecast"),
+
+  // Ground Transport & Vehicle Library with Seating Capacity
+  getVehicles: () =>
+    apiClient.get<import("@/types/travel").TravelVehicle[]>("/api/travel/vehicles"),
+  createVehicle: (payload: Partial<import("@/types/travel").TravelVehicle>) =>
+    apiClient.post<import("@/types/travel").TravelVehicle>("/api/travel/vehicles", payload),
+  lookupVehicleSpecs: (params: { make: string; model?: string; year?: number; vin?: string }) => {
+    const query = new URLSearchParams();
+    query.append("make", params.make);
+    if (params.model) query.append("model", params.model);
+    if (params.year) query.append("year", String(params.year));
+    if (params.vin) query.append("vin", params.vin);
+    return apiClient.get<import("@/types/travel").VehicleSpecLookupResult>(
+      `/api/travel/vehicles/lookup-specs?${query.toString()}`
+    );
+  },
+  assignVehicleSeat: (
+    vehicleId: string,
+    payload: { passenger_name: string; row_number: number; seat_position: string; action: "assign" | "unassign" }
+  ) =>
+    apiClient.put<import("@/types/travel").TravelVehicle>(
+      `/api/travel/vehicles/${vehicleId}/assign-seat`,
+      payload
+    ),
+  deleteVehicle: (vehicleId: string) =>
+    apiClient.delete<{ message: string }>(`/api/travel/vehicles/${vehicleId}`),
 };
 

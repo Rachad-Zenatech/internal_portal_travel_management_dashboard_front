@@ -350,3 +350,54 @@ export interface RealtimeBudgetForecast {
   budgets: TravelBudget[];
 }
 
+export interface VehicleSeat {
+  position: string;
+  occupant: string;
+  type: "driver" | "vip" | "crew" | "staff" | "cargo" | "available";
+}
+
+export interface VehicleSeatRow {
+  row: number;
+  seats: VehicleSeat[];
+}
+
+export interface TravelVehicle {
+  id: string;
+  vehicle_name: string;
+  make: string;
+  model: string;
+  year: number;
+  rental_agency: string;
+  vehicle_class: string;
+  license_plate?: string | null;
+  confirmation_code?: string | null;
+  seating_capacity: number;
+  cargo_cases_capacity: number;
+  assigned_event_id?: string | null;
+  assigned_driver: string;
+  seat_layout?: VehicleSeatRow[];
+  current_passengers?: string[];
+  daily_rate_usd: number;
+  total_cost_usd: number;
+  status: "available" | "reserved" | "active_on_road" | "returned";
+  notes?: string | null;
+  occupied_seats_count?: number;
+  available_seats_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface VehicleSpecLookupResult {
+  make: string;
+  model: string;
+  amount_of_seats: number;
+  seat_configuration: string;
+  rows: number;
+  vehicle_class: string;
+  rental_tier: string;
+  cargo_pelican_capacity: number;
+  luggage_capacity_bags: number;
+  source: string;
+  default_seat_layout: VehicleSeatRow[];
+}
+
