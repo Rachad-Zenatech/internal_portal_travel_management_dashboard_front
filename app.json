@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Travel Management Portal",
+    "slug": "travel-management-portal",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.zenatech.travelmanagement"
+    }
+  }
+}

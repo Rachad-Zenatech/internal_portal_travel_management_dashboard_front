@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useState, useRef } from 'react';
 import { apiClient } from '../services/apiClient';
+import { appStorage } from './storage';
 
 export interface User {
   id: string;
@@ -65,10 +66,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch {
       if (requestId === fetchRequestId.current) {
         setPermissions(null);
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        localStorage.removeItem('ms_id_token');
-        sessionStorage.clear();
+        appStorage.removeItem('token');
+        appStorage.removeItem('user');
+        appStorage.removeItem('ms_id_token');
+        appStorage.clear();
       }
       return null;
     } finally {
@@ -81,12 +82,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchPermissions();
 
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+
     const handleBeforeUnload = () => {
-      const token = sessionStorage.getItem('token');
-      if (token) {
+      const token = appStorage.getItem('token');
+      if (token && typeof navigator !== 'undefined' && navigator.sendBeacon) {
         const data = new FormData();
         data.append('token', token);
-        const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+        const baseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '';
         const url = `${baseUrl.replace(/\/$/, '')}/api/auth/logout`;
         navigator.sendBeacon(url, data);
       }
@@ -166,15 +169,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     
 
     
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('user');
-    sessionStorage.removeItem('ms_id_token');
-    sessionStorage.removeItem('auth_provider');
+    appStorage.removeItem('token');
+    appStorage.removeItem('user');
+    appStorage.removeItem('ms_id_token');
+    appStorage.removeItem('auth_provider');
     setPermissions(null);
     
-    // Always perform SSO logout redirect
-    const postLogoutUri = encodeURIComponent(window.location.origin + '/login');
-    window.location.href = `https://login.microsoftonline.com/common/oauth2/v2.0/logout?post_logout_redirect_uri=${postLogoutUri}`;
+    // Always perform SSO logout redirect on web
+    if (typeof window !== 'undefined' && window.location) {
+      const postLogoutUri = encodeURIComponent(window.location.origin + '/login');
+      window.location.href = `https://login.microsoftonline.com/common/oauth2/v2.0/logout?post_logout_redirect_uri=${postLogoutUri}`;
+    }
   };
 
   return (
