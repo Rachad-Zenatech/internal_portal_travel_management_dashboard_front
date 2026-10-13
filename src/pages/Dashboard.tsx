@@ -1,297 +1,346 @@
-import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/services/apiClient";
-import type { User, Role, AuditLogItem } from "@/types/auth";
+import { travelService } from "@/services/travelService";
+import type { User, Role } from "@/types/auth";
 import {
-  Users,
   ShieldCheck,
-  Key,
+  Plane,
+  Calendar,
+  DollarSign,
+  Wallet,
+  Package,
   Shield,
-  FileClock,
+  Crosshair,
   ArrowRight,
-  CheckCircle2,
-  Lock,
-  Layers,
-  Sparkles,
-  Zap,
-  Activity,
-  Server,
-  Code2,
-  Fingerprint,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
-  const { user, roles, hasRole } = useAuth();
+  const { user, hasRole } = useAuth();
   const isSuperAdmin = hasRole("SUPER_ADMIN") || user?.is_super_admin;
 
-  const { data: users = [], isLoading: isLoadingUsers } = useQuery({
+  const { data: summary } = useQuery({
+    queryKey: ["travelDashboardSummary"],
+    queryFn: travelService.getDashboardSummary,
+  });
+
+  const { data: users = [] } = useQuery({
     queryKey: ["users"],
     queryFn: () => apiClient.get<User[]>("/api/configuration/users").catch(() => []),
     enabled: !!isSuperAdmin,
   });
 
-  const { data: allRoles = [], isLoading: isLoadingRoles } = useQuery({
+  const { data: allRoles = [] } = useQuery({
     queryKey: ["roles"],
     queryFn: () => apiClient.get<Role[]>("/api/configuration/roles").catch(() => []),
   });
 
-  const { data: recentLogs = [], isLoading: isLoadingLogs } = useQuery({
-    queryKey: ["auditLogs"],
-    queryFn: () => apiClient.get<AuditLogItem[]>("/api/audit-logs").catch(() => []),
-  });
-
-  const activeUsers = useMemo(() => users.filter((u) => u.is_active !== false).length, [users]);
-  const activeRoles = useMemo(() => allRoles.filter((r) => r.is_active !== false).length, [allRoles]);
-
-  const quickNavCards = [
-    {
-      title: "User Management",
-      description: "Manage system accounts, user status, super admin rights, and identity details.",
-      icon: Users,
-      path: "/configurations/users",
-      color: "from-blue-500/10 to-indigo-500/10 text-blue-600 dark:text-blue-400 border-blue-200/50 dark:border-blue-900/40",
-      badge: isSuperAdmin ? `${users.length} Users` : undefined,
-    },
-    {
-      title: "Role Hierarchy & Definitions",
-      description: "Define enterprise roles, assign department tags, and build inheritance structures.",
-      icon: ShieldCheck,
-      path: "/configurations/roles",
-      color: "from-emerald-500/10 to-teal-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200/50 dark:border-emerald-900/40",
-      badge: `${allRoles.length} Roles`,
-    },
-    {
-      title: "User-Role Assignment",
-      description: "Assign active roles to users and grant workflow authorization matrices.",
-      icon: Key,
-      path: "/configurations/user-role-assignment",
-      color: "from-purple-500/10 to-violet-500/10 text-purple-600 dark:text-purple-400 border-purple-200/50 dark:border-purple-900/40",
-    },
-    {
-      title: "Navigation & Module Permissions",
-      description: "Fine-tune UI screen visibility and module actions per security role.",
-      icon: Layers,
-      path: "/configurations/role-group-permissions",
-      color: "from-amber-500/10 to-orange-500/10 text-amber-600 dark:text-amber-400 border-amber-200/50 dark:border-amber-900/40",
-    },
-    {
-      title: "API Endpoint Permissions",
-      description: "Enforce granular HTTP method and path pattern security policies.",
-      icon: Lock,
-      path: "/configurations/role-api-permissions",
-      color: "from-rose-500/10 to-red-500/10 text-rose-600 dark:text-rose-400 border-rose-200/50 dark:border-rose-900/40",
-    },
-    {
-      title: "Security & Audit Logs",
-      description: "Inspect immutable audit trails, actor activities, and state transitions.",
-      icon: FileClock,
-      path: "/log/audit",
-      color: "from-cyan-500/10 to-sky-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-200/50 dark:border-cyan-900/40",
-      badge: `${recentLogs.length} Events`,
-    },
-  ];
+  const budgetUtilization =
+    summary?.budget?.allocated && summary.budget.allocated > 0
+      ? (summary.budget.spent / summary.budget.allocated) * 100
+      : 0;
 
   return (
-    <div className="w-full max-w-7xl mx-auto space-y-8 pb-12 animate-in fade-in slide-in-from-bottom-3 duration-500">
-      {/* Hero Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/90 via-primary to-indigo-950 text-primary-foreground p-6 sm:p-8 md:p-10 shadow-xl border border-primary/20">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 rounded-full bg-white/5 blur-2xl pointer-events-none" />
-        <div className="relative z-10 max-w-3xl space-y-3">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-xs font-semibold tracking-wide text-white/90 border border-white/15">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>Enterprise Starter Template • RBAC Enabled</span>
+    <div className="space-y-6">
+      {/* Hero Operations Command Header */}
+      <div className="relative overflow-hidden rounded-2xl border border-border bg-gradient-to-r from-primary/10 via-primary/5 to-background p-6 shadow-xs">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="space-y-1.5 max-w-2xl">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-primary text-primary-foreground">
+                <Plane className="w-3.5 h-3.5" />
+                Zenatech Flight Ops
+              </span>
+              <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-600 border-emerald-300">
+                Connected to Supabase PostgreSQL (Port 8008)
+              </Badge>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+              Travel Management & Drone Expedition Hub
+            </h1>
+            <p className="text-xs sm:text-sm text-muted-foreground">
+              Real-time command center for tournament expeditions, pilot flight rosters, per-diem stipends, Pelican special luggage, and high-risk arena liability policies.
+            </p>
           </div>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-black tracking-tight leading-tight">
-            Welcome back, {user?.full_name || "Administrator"}
-          </h1>
-          <p className="text-sm sm:text-base text-primary-foreground/80 leading-relaxed max-w-2xl">
-            This repository is structured as a production-grade template with role-based access control (RBAC),
-            fine-grained permissions, real-time event streaming, and modular architecture.
-          </p>
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <Badge variant="secondary" className="bg-white/20 hover:bg-white/30 text-white text-xs px-3 py-1 border-transparent">
-              <Fingerprint className="w-3.5 h-3.5 mr-1.5" />
-              {user?.is_super_admin ? "Super Admin" : roles.length > 0 ? roles.map((r) => r.name).join(", ") : "Standard User"}
-            </Badge>
-            <Badge variant="secondary" className="bg-white/10 text-white/90 text-xs px-3 py-1 border-white/10">
-              <Server className="w-3.5 h-3.5 mr-1.5 text-emerald-300" />
-              System Status: Active
-            </Badge>
-          </div>
-        </div>
-      </div>
 
-      {/* Metric Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        <Card className="border-border/60 shadow-xs hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Total Users
-            </CardTitle>
-            <div className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400">
-              <Users className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">
-              {isLoadingUsers ? "..." : users.length || 1}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              <span>{activeUsers || 1} active accounts</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/60 shadow-xs hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Security Roles
-            </CardTitle>
-            <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
-              <Shield className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">
-              {isLoadingRoles ? "..." : allRoles.length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              <span>{activeRoles} active policies</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/60 shadow-xs hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Access Control
-            </CardTitle>
-            <div className="p-2 rounded-lg bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400">
-              <Key className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">RBAC 2.0</div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              <span>Navigation + API + MCP</span>
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/60 shadow-xs hover:shadow-md transition-shadow">
-          <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-            <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-              Audit Stream
-            </CardTitle>
-            <div className="p-2 rounded-lg bg-cyan-50 dark:bg-cyan-950/50 text-cyan-600 dark:text-cyan-400">
-              <Activity className="h-4 w-4" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-foreground">
-              {isLoadingLogs ? "..." : recentLogs.length}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-              <span>Logged audit actions</span>
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Quick Navigation Hub */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-lg font-bold text-foreground tracking-tight">Security & RBAC Modules</h2>
-            <p className="text-xs text-muted-foreground">Manage roles, permissions, user assignments, and security audit trails.</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {quickNavCards.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link key={item.path} to={item.path} className="group block outline-none">
-                <Card className="h-full border-border/60 hover:border-primary/40 bg-card hover:bg-muted/30 transition-all duration-200 shadow-2xs hover:shadow-md">
-                  <CardHeader className="p-5 pb-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className={`p-2.5 rounded-xl border bg-gradient-to-br ${item.color}`}>
-                        <Icon className="h-5 w-5" />
-                      </div>
-                      {item.badge && (
-                        <Badge variant="outline" className="text-[10px] font-semibold">
-                          {item.badge}
-                        </Badge>
-                      )}
-                    </div>
-                    <CardTitle className="text-base font-bold text-foreground group-hover:text-primary transition-colors mt-3">
-                      {item.title}
-                    </CardTitle>
-                    <CardDescription className="text-xs text-muted-foreground leading-relaxed">
-                      {item.description}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-5 pt-0 flex justify-end">
-                    <span className="text-xs font-semibold text-primary flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                      Open Module <ArrowRight className="h-3 w-3" />
-                    </span>
-                  </CardContent>
-                </Card>
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <Button asChild size="sm" className="gap-2 text-xs">
+              <Link to="/travel/events">
+                <Calendar className="w-3.5 h-3.5" />
+                <span>View Expeditions</span>
               </Link>
-            );
-          })}
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-2 text-xs">
+              <Link to="/travel/drone-cargo">
+                <Package className="w-3.5 h-3.5" />
+                <span>Pelican Cargo</span>
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Starter Template Guide */}
-      <Card className="border-border/60 bg-muted/20">
-        <CardHeader>
-          <div className="flex items-center gap-2 text-primary mb-1">
-            <Code2 className="h-5 w-5" />
-            <CardTitle className="text-lg font-bold">Template Architecture & Cloning Guide</CardTitle>
-          </div>
-          <CardDescription className="text-xs leading-relaxed">
-            Key patterns and conventions for developing applications on top of this template.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4 text-xs text-muted-foreground leading-relaxed">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="p-4 rounded-xl border bg-card space-y-2">
-              <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
-                <Zap className="h-4 w-4 text-amber-500" />
-                API Client & Auth
-              </h4>
-              <p>
-                All HTTP requests route through <code className="text-primary font-mono text-[11px]">src/services/apiClient.ts</code> with automatic token injection and reactive error handling.
-              </p>
+      {/* Main KPI Stats Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {/* Card 1: Events */}
+        <Card className="border-border shadow-xs hover:border-primary/50 transition-all">
+          <CardHeader className="pb-2">
+            <CardDescription className="text-xs flex items-center justify-between">
+              <span>Expeditions</span>
+              <Calendar className="w-4 h-4 text-primary" />
+            </CardDescription>
+            <CardTitle className="text-2xl font-bold">
+              {summary?.events.total ?? 0}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground pt-0">
+            {summary?.events.attendees ?? 0} pilots & crew rostered
+          </CardContent>
+        </Card>
+
+        {/* Card 2: Budget Allocated */}
+        <Card className="border-border shadow-xs hover:border-primary/50 transition-all">
+          <CardHeader className="pb-2">
+            <CardDescription className="text-xs flex items-center justify-between">
+              <span>Budget Pool</span>
+              <DollarSign className="w-4 h-4 text-emerald-500" />
+            </CardDescription>
+            <CardTitle className="text-2xl font-bold text-foreground">
+              ${(summary?.budget.allocated ?? 0).toLocaleString()}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground pt-0">
+            ${(summary?.budget.spent ?? 0).toLocaleString()} spent ({budgetUtilization.toFixed(0)}%)
+          </CardContent>
+        </Card>
+
+        {/* Card 3: User Stipends */}
+        <Card className="border-border shadow-xs hover:border-primary/50 transition-all">
+          <CardHeader className="pb-2">
+            <CardDescription className="text-xs flex items-center justify-between">
+              <span>User Stipends</span>
+              <Wallet className="w-4 h-4 text-purple-500" />
+            </CardDescription>
+            <CardTitle className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+              ${(summary?.stipends.total_amount ?? 0).toLocaleString()}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground pt-0">
+            {summary?.stipends.disbursed_count ?? 0} / {summary?.stipends.total_recipients ?? 0} disbursed
+          </CardContent>
+        </Card>
+
+        {/* Card 4: Drone Combat Units */}
+        <Card className="border-border shadow-xs hover:border-primary/50 transition-all">
+          <CardHeader className="pb-2">
+            <CardDescription className="text-xs flex items-center justify-between">
+              <span>Combat Drones</span>
+              <Crosshair className="w-4 h-4 text-rose-500" />
+            </CardDescription>
+            <CardTitle className="text-2xl font-bold text-rose-600 dark:text-rose-400">
+              {summary?.drone_combat_gear.combat_ready ?? 0}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground pt-0">
+            {summary?.drone_combat_gear.lipo_packs ?? 0} certified LiPo flight packs
+          </CardContent>
+        </Card>
+
+        {/* Card 5: Special Luggage */}
+        <Card className="border-border shadow-xs hover:border-primary/50 transition-all">
+          <CardHeader className="pb-2">
+            <CardDescription className="text-xs flex items-center justify-between">
+              <span>Special Cargo</span>
+              <Package className="w-4 h-4 text-amber-500" />
+            </CardDescription>
+            <CardTitle className="text-2xl font-bold text-foreground">
+              {summary?.special_luggage.cases_count ?? 0} Cases
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground pt-0">
+            {(summary?.special_luggage.total_weight_kg ?? 0).toFixed(1)} kg gross airfreight
+          </CardContent>
+        </Card>
+
+        {/* Card 6: Insurance Policy Shield */}
+        <Card className="border-border shadow-xs hover:border-primary/50 transition-all">
+          <CardHeader className="pb-2">
+            <CardDescription className="text-xs flex items-center justify-between">
+              <span>Coverage Shield</span>
+              <Shield className="w-4 h-4 text-blue-500" />
+            </CardDescription>
+            <CardTitle className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              ${(summary?.special_coverage.total_coverage_limit ?? 0).toLocaleString()}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-muted-foreground pt-0">
+            {summary?.special_coverage.active_policies ?? 0} active policies
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Operational Modules Navigation Cards */}
+      <div>
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+          Travel & Operations Workflows
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <Link
+            to="/travel/events"
+            className="group block p-4 rounded-xl border border-border bg-card hover:border-primary hover:shadow-md transition-all"
+          >
+            <div className="w-10 h-10 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+              <Calendar className="w-5 h-5" />
             </div>
-            <div className="p-4 rounded-xl border bg-card space-y-2">
-              <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
-                <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                Role-Based Guarding
-              </h4>
-              <p>
-                Pages and actions are gated by <code className="text-primary font-mono text-[11px]">&lt;ProtectedRoute&gt;</code> and <code className="text-primary font-mono text-[11px]">hasPermission()</code>.
-              </p>
+            <h3 className="font-semibold text-foreground text-sm flex items-center justify-between">
+              <span>Events & Roster</span>
+              <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              "Who is going": Flight reservations, hotel bookings, pilot assignments, and event attendance statuses.
+            </p>
+          </Link>
+
+          <Link
+            to="/travel/budgets"
+            className="group block p-4 rounded-xl border border-border bg-card hover:border-primary hover:shadow-md transition-all"
+          >
+            <div className="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+              <DollarSign className="w-5 h-5" />
             </div>
-            <div className="p-4 rounded-xl border bg-card space-y-2">
-              <h4 className="font-bold text-foreground text-sm flex items-center gap-2">
-                <Layers className="h-4 w-4 text-blue-500" />
-                Domain Organization
-              </h4>
-              <p>
-                Organize new pages under <code className="text-primary font-mono text-[11px]">src/pages/&lt;Feature&gt;</code> and declare shared interfaces in <code className="text-primary font-mono text-[11px]">src/types/</code>.
-              </p>
+            <h3 className="font-semibold text-foreground text-sm flex items-center justify-between">
+              <span>Trip Budgeting</span>
+              <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              "Add budgeting": Itemized flights, lodging, luggage excess fees, combat gear repairs, and budget tracking.
+            </p>
+          </Link>
+
+          <Link
+            to="/travel/stipends"
+            className="group block p-4 rounded-xl border border-border bg-card hover:border-primary hover:shadow-md transition-all"
+          >
+            <div className="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+              <Wallet className="w-5 h-5" />
             </div>
-          </div>
-        </CardContent>
-      </Card>
+            <h3 className="font-semibold text-foreground text-sm flex items-center justify-between">
+              <span>User Stipends</span>
+              <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              "User stipend for who": Daily per diems ($/day × days), direct deposit disbursements, and payout ledger.
+            </p>
+          </Link>
+
+          <Link
+            to="/travel/drone-cargo"
+            className="group block p-4 rounded-xl border border-border bg-card hover:border-primary hover:shadow-md transition-all"
+          >
+            <div className="w-10 h-10 rounded-lg bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+              <Crosshair className="w-5 h-5" />
+            </div>
+            <h3 className="font-semibold text-foreground text-sm flex items-center justify-between">
+              <span>Combat Gear & Cargo</span>
+              <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary transition-colors" />
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">
+              "Play fight for drones, special luggage & coverage": Pelican cases, LiPo vaults, arena nets, and insurance policies.
+            </p>
+          </Link>
+        </div>
+      </div>
+
+      {/* Recent Upcoming Expeditions & System Administration Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left 2 Cols: Upcoming Expeditions Live Feed */}
+        <Card className="lg:col-span-2 border-border shadow-xs">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <Plane className="w-4 h-4 text-primary" />
+                <span>Active Travel Expeditions</span>
+              </CardTitle>
+              <Button asChild variant="ghost" size="sm" className="text-xs gap-1">
+                <Link to="/travel/events">
+                  <span>View All</span>
+                  <ArrowRight className="w-3 h-3" />
+                </Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {!summary?.events.recent || summary.events.recent.length === 0 ? (
+              <div className="p-8 text-center text-sm text-muted-foreground">
+                No active expeditions scheduled.
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {summary.events.recent.map((ev) => (
+                  <div key={ev.id} className="py-3 flex items-center justify-between gap-3 text-xs">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-foreground text-sm">{ev.title}</span>
+                        <Badge variant="outline" className="text-[11px] bg-emerald-500/10 text-emerald-600 border-emerald-300">
+                          {ev.status}
+                        </Badge>
+                      </div>
+                      <div className="text-muted-foreground flex items-center gap-3">
+                        <span>{ev.location}</span>
+                        <span>•</span>
+                        <span>{ev.start_date} → {ev.end_date}</span>
+                      </div>
+                    </div>
+                    <Button asChild size="sm" variant="outline" className="text-xs h-7">
+                      <Link to="/travel/events">Manage Roster</Link>
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Right 1 Col: Administration & Security */}
+        <Card className="border-border shadow-xs">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-primary" />
+              <span>Security & Core Platform</span>
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Portal administration & user authorizations.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-3 text-xs">
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-accent/40">
+              <span className="text-muted-foreground">Registered Users</span>
+              <span className="font-semibold text-foreground">{users.length} Accounts</span>
+            </div>
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-accent/40">
+              <span className="text-muted-foreground">Defined Security Roles</span>
+              <span className="font-semibold text-foreground">{allRoles.length} Roles</span>
+            </div>
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-accent/40">
+              <span className="text-muted-foreground">Backend API Server</span>
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">Port 8008</span>
+            </div>
+            <div className="flex items-center justify-between p-2.5 rounded-lg bg-accent/40">
+              <span className="text-muted-foreground">Frontend Dev Server</span>
+              <span className="font-semibold text-blue-600 dark:text-blue-400">Port 5178</span>
+            </div>
+            <div className="pt-2">
+              <Button asChild variant="outline" size="sm" className="w-full text-xs">
+                <Link to="/configurations/users">Manage Portal Accounts</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

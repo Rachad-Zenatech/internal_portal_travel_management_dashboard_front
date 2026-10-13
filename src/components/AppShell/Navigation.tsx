@@ -2,6 +2,7 @@ import {
   LayoutDashboard,
   ShieldCheck,
   FileClock,
+  Plane,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -27,6 +28,21 @@ export const navigation: NavigationItem[] = [
     icon: LayoutDashboard,
     section: "MAIN",
     navigationCode: "DASHBOARD",
+  },
+  {
+    label: "Travel & Expeditions",
+    icon: Plane,
+    section: "TRAVEL OPERATIONS",
+    subItems: [
+      { label: "AI Travel Assistant", path: "/travel/ai-assistant" },
+      { label: "Weekly 20–30 Matrix", path: "/travel/weekly-matrix" },
+      { label: "Air Canada Live Sync", path: "/travel/scraper-sync" },
+      { label: "Executive Profiles", path: "/travel/executives" },
+      { label: "Events & Roster", path: "/travel/events" },
+      { label: "Trip Budgeting", path: "/travel/budgets" },
+      { label: "User Stipends", path: "/travel/stipends" },
+      { label: "Drone Cargo & Coverage", path: "/travel/drone-cargo" },
+    ],
   },
   {
     label: "System & Security",

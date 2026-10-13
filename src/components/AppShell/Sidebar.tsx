@@ -16,6 +16,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
+    "Travel & Expeditions": true,
     "System & Security": true,
     "Logs & Audit": true,
   });

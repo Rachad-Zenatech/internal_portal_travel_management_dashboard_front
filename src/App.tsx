@@ -20,6 +20,15 @@ const SystemLogsPage = lazy(() => import("./pages/Logs/SystemLogsPage"));
 const Login = lazy(() => import("./pages/Login"));
 const PendingAccess = lazy(() => import("./pages/PendingAccess"));
 
+const TravelEventsPage = lazy(() => import("./pages/Travel/TravelEventsPage"));
+const TravelBudgetPage = lazy(() => import("./pages/Travel/TravelBudgetPage"));
+const TravelStipendPage = lazy(() => import("./pages/Travel/TravelStipendPage"));
+const DroneCargoPage = lazy(() => import("./pages/Travel/DroneCargoPage"));
+const AiTravelAssistantPage = lazy(() => import("./pages/Travel/AiTravelAssistantPage"));
+const AirCanadaSyncPage = lazy(() => import("./pages/Travel/AirCanadaSyncPage"));
+const WeeklyTravelMatrixPage = lazy(() => import("./pages/Travel/WeeklyTravelMatrixPage"));
+const ExecutiveProfilesPage = lazy(() => import("./pages/Travel/ExecutiveProfilesPage"));
+
 function NotFoundAlert() {
   return (
     <div className="flex flex-col items-center justify-center p-8 sm:p-12 text-center bg-card rounded-xl border border-border shadow-xs my-6 max-w-lg mx-auto">
@@ -66,6 +75,17 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+
+              {/* Travel Operations Routes */}
+              <Route path="/travel" element={<Navigate to="/travel/ai-assistant" replace />} />
+              <Route path="/travel/ai-assistant" element={<AiTravelAssistantPage />} />
+              <Route path="/travel/weekly-matrix" element={<WeeklyTravelMatrixPage />} />
+              <Route path="/travel/scraper-sync" element={<AirCanadaSyncPage />} />
+              <Route path="/travel/executives" element={<ExecutiveProfilesPage />} />
+              <Route path="/travel/events" element={<TravelEventsPage />} />
+              <Route path="/travel/budgets" element={<TravelBudgetPage />} />
+              <Route path="/travel/stipends" element={<TravelStipendPage />} />
+              <Route path="/travel/drone-cargo" element={<DroneCargoPage />} />
 
               {/* Configuration Routes */}
               <Route path="/configuration" element={<Navigate to="/configurations/users" replace />} />
