@@ -47,7 +47,7 @@ export const navigation: NavigationItem[] = [
   {
     label: "System & Security",
     icon: ShieldCheck,
-    section: "ADMINISTRATION",
+    section: "TRAVEL MANAGEMENT",
     subItems: [
       { label: "Users", path: "/configurations/users", navigationCode: "CONFIG_USERS" },
       { label: "Roles", path: "/configurations/roles", navigationCode: "CONFIG_ROLES" },
@@ -60,7 +60,7 @@ export const navigation: NavigationItem[] = [
   {
     label: "Logs & Audit",
     icon: FileClock,
-    section: "ADMINISTRATION",
+    section: "TRAVEL MANAGEMENT",
     subItems: [
       { label: "Audit Log", path: "/log/audit", navigationCode: "AUDIT_LOG" },
       { label: "System Logs", path: "/log/system-logs", navigationCode: "AUDIT_LOG" },

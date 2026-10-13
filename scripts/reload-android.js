@@ -43,7 +43,7 @@ function getAdbPath() {
       if (foundUser) {
         sdkBase = `/mnt/c/Users/${foundUser}/AppData/Local/Android/Sdk`;
       }
-    } catch {}
+    } catch { }
   }
 
   if (!sdkBase) {
@@ -60,9 +60,9 @@ async function main() {
 
   try {
     execSync(`"${adbPath}" reverse tcp:8090 tcp:8090`, { stdio: "ignore" });
-    execSync(`"${adbPath}" reverse tcp:8900 tcp:8900`, { stdio: "ignore" });
-    execSync(`"${adbPath}" reverse tcp:6000 tcp:6000`, { stdio: "ignore" });
-    console.log("🔗 Reverse ports configured (8090, 8900, 6000).");
+    execSync(`"${adbPath}" reverse tcp:8008 tcp:8008`, { stdio: "ignore" });
+    execSync(`"${adbPath}" reverse tcp:5178 tcp:5178`, { stdio: "ignore" });
+    console.log("🔗 Reverse ports configured (8090, 8008, 5178).");
   } catch (err) {
     console.log("⚠️ Could not reverse ports:", err.message);
   }
