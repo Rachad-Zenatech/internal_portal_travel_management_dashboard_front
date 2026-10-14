@@ -19,7 +19,15 @@ import {
   Compass,
   CheckCircle2,
   AlertCircle,
+  Radio,
+  Megaphone,
+  Send,
+  Bell,
+  Clock,
+  LogOut,
+  CheckCheck,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -37,6 +45,8 @@ import {
 const EXECUTIVE_TRAVELERS = [
   "Michael Vance (CEO)",
   "Vanessa (Executive Assistant)",
+  "Rachad Quintyne (Lead Architect)",
+  "Alvin Tsang (Engineering Lead)",
   "Sajjad (VP Engineering)",
   "Jim (VP Operations)",
   "Simon (VP Hardware)",
@@ -58,6 +68,8 @@ export default function VehicleLibraryPage() {
     user?.email?.toLowerCase().includes("ceo") ||
     user?.email?.toLowerCase().includes("vanessa") ||
     user?.email?.toLowerCase().includes("admin") ||
+    user?.email?.toLowerCase().includes("rachad") ||
+    user?.email?.toLowerCase().includes("alvin") ||
     user?.job_title?.toLowerCase().includes("ceo") ||
     user?.job_title?.toLowerCase().includes("vp") ||
     user?.job_title?.toLowerCase().includes("lead") ||
@@ -158,6 +170,76 @@ export default function VehicleLibraryPage() {
     total_cost_usd: 1050,
     status: "active_on_road" as const,
   });
+
+  // Departure Broadcast Dialog State
+  const [broadcastVehicle, setBroadcastVehicle] = useState<TravelVehicle | null>(null);
+  const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
+  const [depStatus, setDepStatus] = useState<"loading_up" | "leaving_soon" | "en_route" | "arrived" | "cancelled">("loading_up");
+  const [depLocation, setDepLocation] = useState("Main Venue Exit / West Paddock Bay");
+  const [depTime, setDepTime] = useState("In 10 minutes");
+  const [depMessage, setDepMessage] = useState("");
+
+  // Broadcast Departure Mutation
+  const broadcastDepartureMutation = useMutation({
+    mutationFn: ({ vehicleId, payload }: { vehicleId: string; payload: any }) =>
+      travelService.broadcastVehicleDeparture(vehicleId, payload),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["travelVehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["travelDashboardSummary"] });
+      setIsBroadcastModalOpen(false);
+      toast.success(res.message || "Departure notification broadcasted to all trip attendees!");
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || "Failed to broadcast departure notification");
+    },
+  });
+
+  // Check-In to Vehicle Mutation
+  const checkInMutation = useMutation({
+    mutationFn: ({ vehicleId, payload }: { vehicleId: string; payload: any }) =>
+      travelService.checkInToVehicle(vehicleId, payload),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["travelVehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["travelEventDetails"] });
+      queryClient.invalidateQueries({ queryKey: ["travelDashboardSummary"] });
+      toast.success(res.message || "You have updated your vehicle check-in!");
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || "Failed to check in to vehicle");
+    },
+  });
+
+  const handleOpenBroadcastModal = (vehicle: TravelVehicle) => {
+    setBroadcastVehicle(vehicle);
+    setDepStatus(
+      (vehicle.departure_status as any) && vehicle.departure_status !== "idle"
+        ? (vehicle.departure_status as any)
+        : "loading_up"
+    );
+    setDepLocation(vehicle.departure_location || "Main Paddock Gate / Bay 3");
+    setDepTime(vehicle.departure_time || "In 10 minutes");
+    setDepMessage(
+      vehicle.departure_message ||
+        `Loading gear and pelican cases now. Leaving for the hotel in 10 minutes! Check in to reserve a seat.`
+    );
+    setIsBroadcastModalOpen(true);
+  };
+
+  const handleSendBroadcast = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!broadcastVehicle) return;
+    broadcastDepartureMutation.mutate({
+      vehicleId: broadcastVehicle.id,
+      payload: {
+        departure_status: depStatus,
+        departure_location: depLocation,
+        departure_time: depTime,
+        message: depMessage,
+        broadcaster_name: user?.full_name || broadcastVehicle.assigned_driver || "Assigned Driver",
+        broadcaster_email: user?.email,
+      },
+    });
+  };
 
   // Seat Assignment Mutation
   const assignSeatMutation = useMutation({
@@ -808,11 +890,63 @@ export default function VehicleLibraryPage() {
                   </CardHeader>
 
                   <CardContent className="pt-4 space-y-4">
+                    {/* Departure / Loading Notification Banner */}
+                    {v.departure_status && v.departure_status !== "idle" && (
+                      <div
+                        className={`p-3 rounded-lg border text-xs space-y-1.5 transition-all ${
+                          v.departure_status === "loading_up"
+                            ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                            : v.departure_status === "leaving_soon"
+                            ? "bg-amber-500/15 border-amber-500/40 text-amber-400"
+                            : v.departure_status === "en_route"
+                            ? "bg-sky-500/10 border-sky-500/30 text-sky-400"
+                            : v.departure_status === "arrived"
+                            ? "bg-indigo-500/10 border-indigo-500/30 text-indigo-400"
+                            : "bg-muted/40 border-border text-muted-foreground"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between font-bold">
+                          <span className="flex items-center gap-1.5 uppercase tracking-wide">
+                            <Radio className="h-3.5 w-3.5 animate-pulse text-primary" />
+                            {v.departure_status === "loading_up" && "Loading Up Now — Boarding Open"}
+                            {v.departure_status === "leaving_soon" && "Final Call — Departing Soon!"}
+                            {v.departure_status === "en_route" && "En Route to Destination"}
+                            {v.departure_status === "arrived" && "Arrived at Destination"}
+                            {v.departure_status === "cancelled" && "Departure Delayed"}
+                          </span>
+                          {v.departure_time && (
+                            <span className="flex items-center gap-1 text-[11px] font-medium opacity-90">
+                              <Clock className="h-3 w-3" />
+                              {v.departure_time}
+                            </span>
+                          )}
+                        </div>
+
+                        {v.departure_location && (
+                          <div className="flex items-center gap-1 text-[11px] text-foreground font-medium">
+                            <MapPin className="h-3 w-3 text-primary shrink-0" />
+                            <span>Pickup / Meeting Spot: <strong>{v.departure_location}</strong></span>
+                          </div>
+                        )}
+
+                        {v.departure_message && (
+                          <p className="text-[11px] text-foreground/90 italic bg-background/50 p-1.5 rounded border border-border/40">
+                            "{v.departure_message}"
+                          </p>
+                        )}
+
+                        <div className="flex items-center justify-between pt-1 border-t border-border/40 text-[10px] text-muted-foreground">
+                          <span>Broadcast by: {v.departure_updated_by || v.assigned_driver}</span>
+                          <span>{available} seats open</span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Visual Vehicle Seat Map */}
                     <div className="rounded-lg bg-muted/20 border border-border/60 p-3 space-y-2">
                       <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                         <span>
-                          {isAttendeeView ? "Seating Architecture" : "Interactive Seating Map (Click Seat to Assign)"}
+                          {isAttendeeView ? "Seating Architecture (Click Seat to Claim)" : "Interactive Seating Map (Click Seat to Assign)"}
                         </span>
                         <span>Front / Windshield ➔</span>
                       </div>
@@ -827,14 +961,38 @@ export default function VehicleLibraryPage() {
                                   const isUserSeat =
                                     v.user_assigned_seat?.row === row.row &&
                                     v.user_assigned_seat?.position === seat.position;
+                                  const isSeatAvailable =
+                                    (seat.occupant || "").toLowerCase() === "available" ||
+                                    (seat.occupant || "").toLowerCase() === "empty" ||
+                                    !seat.occupant;
 
                                   return (
                                     <button
                                       key={seat.position}
                                       type="button"
-                                      disabled={isAttendeeView}
                                       onClick={() => {
-                                        if (isAttendeeView) return;
+                                        if (isAttendeeView) {
+                                          if (isSeatAvailable) {
+                                            checkInMutation.mutate({
+                                              vehicleId: v.id,
+                                              payload: {
+                                                passenger_name: effectiveName || "Traveler",
+                                                seat_position: seat.position,
+                                                row_number: row.row,
+                                                action: "check_in",
+                                              },
+                                            });
+                                          } else if (isUserSeat) {
+                                            checkInMutation.mutate({
+                                              vehicleId: v.id,
+                                              payload: {
+                                                passenger_name: effectiveName || "Traveler",
+                                                action: "check_out",
+                                              },
+                                            });
+                                          }
+                                          return;
+                                        }
                                         setSelectedVehicle(v);
                                         setSelectedSeat({ row: row.row, seat });
                                         setAssigneeName("");
@@ -843,7 +1001,7 @@ export default function VehicleLibraryPage() {
                                       className={`px-2 py-1 rounded text-xs border font-medium transition-all text-left flex items-center gap-1.5 ${getSeatBadgeColor(
                                         seat,
                                         isUserSeat
-                                      )}`}
+                                      )} ${isAttendeeView && isSeatAvailable ? "hover:scale-105 hover:border-emerald-400 cursor-pointer" : ""}`}
                                       title={`Seat ${seat.position}: ${seat.occupant}`}
                                     >
                                       <span className="font-bold opacity-80">{seat.position}</span>
@@ -871,6 +1029,95 @@ export default function VehicleLibraryPage() {
                         <span className="text-foreground">{v.current_passengers.join(", ")}</span>
                       </div>
                     )}
+
+                    {/* Action Bar: Check-In to Car & Broadcast Departure */}
+                    {(() => {
+                      const isCurrentPassenger = Boolean(
+                        hasMySeat ||
+                          (v.current_passengers || []).some(
+                            (p) =>
+                              p.toLowerCase().includes((effectiveName || "").toLowerCase()) ||
+                              (effectiveName && p.toLowerCase().includes(effectiveName.split(" ")[0].toLowerCase()))
+                          )
+                      );
+
+                      const canBroadcastThisVehicle = Boolean(
+                        isActualLeader ||
+                          !isAttendeeView ||
+                          (v.assigned_driver &&
+                            effectiveName &&
+                            v.assigned_driver.toLowerCase().includes(effectiveName.toLowerCase().split(" ")[0]))
+                      );
+
+                      return (
+                        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border/60">
+                          {/* Check-In / Boarding Button for Travelers */}
+                          <div className="flex items-center gap-2">
+                            {isCurrentPassenger ? (
+                              <div className="flex items-center gap-2">
+                                <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/40 text-xs py-1 px-2.5 flex items-center gap-1">
+                                  <CheckCheck className="h-3.5 w-3.5" />
+                                  <span>Checked In (Riding This Car)</span>
+                                </Badge>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    checkInMutation.mutate({
+                                      vehicleId: v.id,
+                                      payload: {
+                                        passenger_name: effectiveName || "Traveler",
+                                        action: "check_out",
+                                      },
+                                    })
+                                  }
+                                  disabled={checkInMutation.isPending}
+                                  className="text-xs h-8 text-muted-foreground hover:text-destructive"
+                                >
+                                  <LogOut className="h-3 w-3 mr-1" />
+                                  Leave Car
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                size="sm"
+                                disabled={available <= 0 || checkInMutation.isPending}
+                                onClick={() =>
+                                  checkInMutation.mutate({
+                                    vehicleId: v.id,
+                                    payload: {
+                                      passenger_name: effectiveName || "Traveler",
+                                      action: "check_in",
+                                    },
+                                  })
+                                }
+                                className={`text-xs h-8 gap-1.5 font-semibold shadow-xs ${
+                                  available > 0
+                                    ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    : "opacity-60 cursor-not-allowed"
+                                }`}
+                              >
+                                <UserCheck className="h-3.5 w-3.5" />
+                                <span>{available > 0 ? "Check In to This Car" : "Car is Full"}</span>
+                              </Button>
+                            )}
+                          </div>
+
+                          {/* Driver Departure Broadcast Button */}
+                          {(canBroadcastThisVehicle || !isAttendeeView) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleOpenBroadcastModal(v)}
+                              className="text-xs h-8 gap-1.5 border-primary/40 text-primary hover:bg-primary/10 ml-auto"
+                            >
+                              <Megaphone className="h-3.5 w-3.5" />
+                              <span>Broadcast Departure</span>
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </CardContent>
                 </Card>
               );
@@ -1098,6 +1345,115 @@ export default function VehicleLibraryPage() {
               Save Vehicle
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Broadcast Vehicle Departure / Loading Alert Modal */}
+      <Dialog open={isBroadcastModalOpen} onOpenChange={setIsBroadcastModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Megaphone className="h-5 w-5 text-primary" />
+              <span>Broadcast Departure Alert</span>
+            </DialogTitle>
+            <DialogDescription>
+              Notify everyone registered for{" "}
+              <strong>{broadcastVehicle?.event_title || "this trip"}</strong> that you are loading up or departing so they can check into this vehicle.
+            </DialogDescription>
+          </DialogHeader>
+
+          {broadcastVehicle && (
+            <form onSubmit={handleSendBroadcast} className="space-y-4 py-2">
+              <div className="p-3 rounded-lg bg-muted/40 text-xs space-y-1 border border-border/50">
+                <div className="flex items-center justify-between font-semibold text-foreground">
+                  <span>{broadcastVehicle.vehicle_name}</span>
+                  <Badge variant="outline">{broadcastVehicle.seating_capacity} Total Seats</Badge>
+                </div>
+                <div className="text-muted-foreground">
+                  Assigned Driver: <strong className="text-foreground">{broadcastVehicle.assigned_driver}</strong>
+                </div>
+                <div className="text-muted-foreground">
+                  Trip / Event: <strong className="text-foreground">{broadcastVehicle.event_title || "General Expedition"}</strong>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Departure Status</Label>
+                <select
+                  value={depStatus}
+                  onChange={(e) => setDepStatus(e.target.value as any)}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-xs"
+                >
+                  <option value="loading_up">🟢 Loading Up / Boarding Open (Leaving in 10-15m)</option>
+                  <option value="leaving_soon">🟡 Final Call — Leaving in 5 Minutes!</option>
+                  <option value="en_route">🔵 En Route / Wheels Up (Departed Venue)</option>
+                  <option value="arrived">🏁 Arrived at Destination</option>
+                  <option value="cancelled">🛑 Departure Delayed / Rescheduled</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Pickup / Loading Spot</Label>
+                <Input
+                  required
+                  value={depLocation}
+                  onChange={(e) => setDepLocation(e.target.value)}
+                  placeholder="e.g. Main Convention Gate / West Paddock Bay 3"
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Departure Countdown / Time</Label>
+                <Input
+                  required
+                  value={depTime}
+                  onChange={(e) => setDepTime(e.target.value)}
+                  placeholder="e.g. In 10 minutes (17:45)"
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Custom Broadcast Message</Label>
+                <Input
+                  value={depMessage}
+                  onChange={(e) => setDepMessage(e.target.value)}
+                  placeholder="e.g. Loading gear and pelican cases. Check in now if you need a ride!"
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="p-2.5 rounded bg-primary/10 border border-primary/20 text-[11px] text-primary flex items-start gap-2">
+                <Bell className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  This notification will be dispatched instantly to all travelers registered on{" "}
+                  <strong>{broadcastVehicle.event_title || "this trip"}</strong> so they can view seats and check in.
+                </span>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsBroadcastModalOpen(false)}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={broadcastDepartureMutation.isPending}
+                  className="text-xs gap-1.5 font-semibold bg-primary text-primary-foreground"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                  <span>
+                    {broadcastDepartureMutation.isPending ? "Broadcasting..." : "Send Departure Alert"}
+                  </span>
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
     </div>

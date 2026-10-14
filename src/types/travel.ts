@@ -388,8 +388,31 @@ export interface TravelVehicle {
   occupied_seats_count?: number;
   available_seats_count?: number;
   user_assigned_seat?: { position: string; row: number; occupant: string; type: string } | null;
+  departure_status?: "idle" | "loading_up" | "leaving_soon" | "en_route" | "arrived" | "cancelled" | null;
+  departure_location?: string | null;
+  departure_time?: string | null;
+  departure_message?: string | null;
+  departure_updated_at?: string | null;
+  departure_updated_by?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface VehicleDepartureBroadcastPayload {
+  departure_status: "loading_up" | "leaving_soon" | "en_route" | "arrived" | "cancelled";
+  departure_location?: string;
+  departure_time?: string;
+  message?: string;
+  broadcaster_name?: string;
+  broadcaster_email?: string;
+}
+
+export interface VehicleCheckInPayload {
+  passenger_name: string;
+  passenger_email?: string;
+  seat_position?: string;
+  row_number?: number;
+  action?: "check_in" | "check_out";
 }
 
 export interface VehicleSpecLookupResult {

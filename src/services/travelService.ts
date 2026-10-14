@@ -165,6 +165,29 @@ export const travelService = {
       `/api/travel/vehicles/${vehicleId}/assign-seat`,
       payload
     ),
+  broadcastVehicleDeparture: (
+    vehicleId: string,
+    payload: import("@/types/travel").VehicleDepartureBroadcastPayload
+  ) =>
+    apiClient.post<{
+      status: string;
+      message: string;
+      departure_status: string;
+      seats_remaining: number;
+      vehicle: import("@/types/travel").TravelVehicle;
+    }>(`/api/travel/vehicles/${vehicleId}/broadcast-departure`, payload),
+  checkInToVehicle: (
+    vehicleId: string,
+    payload: import("@/types/travel").VehicleCheckInPayload
+  ) =>
+    apiClient.post<{
+      status: string;
+      message: string;
+      seat_position?: string;
+      row_number?: number;
+      seats_remaining: number;
+      vehicle: import("@/types/travel").TravelVehicle;
+    }>(`/api/travel/vehicles/${vehicleId}/check-in`, payload),
   deleteVehicle: (vehicleId: string) =>
     apiClient.delete<{ message: string }>(`/api/travel/vehicles/${vehicleId}`),
 
