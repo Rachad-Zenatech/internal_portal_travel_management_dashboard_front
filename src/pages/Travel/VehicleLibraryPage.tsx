@@ -49,6 +49,7 @@ import {
   resolveVehicleSpecs,
   formatVehicleName,
 } from "@/data/vehicleCatalog";
+import { AutocompleteInput } from "@/components/ui/autocomplete-input";
 
 
 
@@ -928,19 +929,28 @@ export default function VehicleLibraryPage() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
               <div>
                 <Label className="text-xs">Vehicle Make</Label>
-                <Input
-                  placeholder="e.g. Cadillac, Ford, Toyota"
+                <AutocompleteInput
+                  placeholder="e.g. Cadillac, Ford, Toyota..."
                   value={lookupMake}
-                  onChange={(e) => setLookupMake(e.target.value)}
+                  onChange={(val) => setLookupMake(val)}
+                  onSelectOption={(opt) => setLookupMake(opt.name)}
+                  options={availableMakes.map((m) => ({ id: m, name: m, badge: "Make" }))}
                   className="mt-1 bg-background"
                 />
               </div>
               <div>
                 <Label className="text-xs">Model</Label>
-                <Input
-                  placeholder="e.g. Escalade, Transit, Suburban, Odyssey"
+                <AutocompleteInput
+                  placeholder="e.g. Escalade, Transit, Suburban..."
                   value={lookupModel}
-                  onChange={(e) => setLookupModel(e.target.value)}
+                  onChange={(val) => setLookupModel(val)}
+                  onSelectOption={(opt) => setLookupModel(opt.name)}
+                  options={getModelsForMake(lookupMake).map((m) => ({
+                    id: m.model,
+                    name: m.model,
+                    sublabel: `${m.seats} Seats • ${m.cargoCases} Cases • $${m.dailyRate}/day`,
+                    badge: `${m.seats} Seats`,
+                  }))}
                   className="mt-1 bg-background"
                 />
               </div>
@@ -1557,18 +1567,14 @@ export default function VehicleLibraryPage() {
                   {availableMakes.length}+ Global Brands (PostgreSQL DB)
                 </span>
               </div>
-              <Input
-                list="all-vehicle-makes-list"
+              <AutocompleteInput
                 value={newVehicle.make}
-                onChange={(e) => handleMakeChange(e.target.value)}
-                className="mt-1 h-10"
-                placeholder="e.g. Chevrolet, Ford, Cadillac..."
+                onChange={(val) => handleMakeChange(val)}
+                onSelectOption={(opt) => handleMakeChange(opt.name)}
+                options={availableMakes.map((mk) => ({ id: mk, name: mk, badge: "Make" }))}
+                placeholder="Search or select make (e.g. Cadillac, Chevrolet, Ford)..."
+                className="mt-1 h-10 font-medium"
               />
-              <datalist id="all-vehicle-makes-list">
-                {availableMakes.map((m) => (
-                  <option key={m} value={m} />
-                ))}
-              </datalist>
               <div className="flex items-center justify-between mt-1 text-[11px] text-muted-foreground">
                 <span>⚡ Rate benchmark:</span>
                 <span className="font-semibold text-primary">
@@ -1595,33 +1601,28 @@ export default function VehicleLibraryPage() {
                   </button>
                 </div>
               </div>
-              <Input
-                list="dynamic-models-list"
+              <AutocompleteInput
                 value={newVehicle.model}
-                onChange={(e) => handleModelChange(e.target.value)}
-                className="mt-1 h-10"
+                onChange={(val) => handleModelChange(val)}
+                onSelectOption={(opt) => handleModelChange(opt.name)}
+                options={availableModelOptions.map((mdl) => {
+                  const cat = catalogModelsForMake.find((cm) => cm.model.toLowerCase() === mdl.toLowerCase());
+                  return {
+                    id: mdl,
+                    name: mdl,
+                    sublabel: cat
+                      ? `${cat.seats} Seats • ${cat.cargoCases} Pelican Cases • $${cat.dailyRate}/day`
+                      : `${newVehicle.make || "Fleet"} Model`,
+                    badge: cat ? `${cat.seats} Seats` : undefined,
+                  };
+                })}
                 placeholder={
                   newVehicle.make
-                    ? `Pick or type a ${newVehicle.make} model...`
-                    : "e.g. Suburban High Country"
+                    ? `Search or select ${newVehicle.make} model...`
+                    : "e.g. Suburban High Country, Escalade..."
                 }
+                className="mt-1 h-10 font-semibold"
               />
-              <datalist id="dynamic-models-list">
-                {/* 1. Curated models for this make with detailed capacity badges */}
-                {catalogModelsForMake.map((m) => (
-                  <option
-                    key={m.model}
-                    value={m.model}
-                    label={`${m.seats} Seats • ${m.cargoCases} Pelican Cases • $${m.dailyRate}/day`}
-                  />
-                ))}
-                {/* 2. Additional models from catalog and NHTSA API */}
-                {availableModelOptions
-                  .filter((dm) => !catalogModelsForMake.some((cm) => cm.model.toLowerCase() === dm.toLowerCase()))
-                  .map((dm) => (
-                    <option key={dm} value={dm} label={`${newVehicle.make} Model`} />
-                  ))}
-              </datalist>
               <div className="flex items-center justify-between mt-1 text-[11px] text-muted-foreground">
                 <span>Selected:</span>
                 <span className="font-semibold text-foreground">
@@ -1684,18 +1685,25 @@ export default function VehicleLibraryPage() {
                   ⚡ Auto-assigns to Seat 1A
                 </span>
               </div>
-              <Input
-                list="add-vehicle-drivers-list"
+              <AutocompleteInput
                 value={newVehicle.assigned_driver}
-                onChange={(e) => setNewVehicle({ ...newVehicle, assigned_driver: e.target.value })}
+                onChange={(val) => setNewVehicle({ ...newVehicle, assigned_driver: val })}
+                onSelectOption={(opt) => setNewVehicle({ ...newVehicle, assigned_driver: opt.name })}
+                options={addVehicleDriverCandidates.map((d) => ({
+                  id: d.name,
+                  name: d.name,
+                  sublabel: d.label,
+                  badge: d.label.includes("Chauffeur")
+                    ? "Chauffeur"
+                    : d.label.includes("Coordinator")
+                    ? "Coordinator"
+                    : d.label.includes("Executive")
+                    ? "Executive"
+                    : "Attendee",
+                }))}
+                placeholder="Search confirmed attendee, executive, or chauffeur..."
                 className="mt-1 h-10 font-medium"
-                placeholder="Type or select driver from trip roster or fleet..."
               />
-              <datalist id="add-vehicle-drivers-list">
-                {addVehicleDriverCandidates.map((d) => (
-                  <option key={d.name} value={d.name} label={d.label} />
-                ))}
-              </datalist>
 
               {/* Quick suggestion chips */}
               <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
@@ -1834,18 +1842,25 @@ export default function VehicleLibraryPage() {
                   <Label className="text-xs font-semibold">Select or Type Driver Name</Label>
                   <span className="text-[11px] text-primary font-medium">⚡ Syncs with Seat 1A</span>
                 </div>
-                <Input
-                  list="reassign-driver-autocomplete-list"
+                <AutocompleteInput
                   value={reassignDriverName}
-                  onChange={(e) => setReassignDriverName(e.target.value)}
+                  onChange={(val) => setReassignDriverName(val)}
+                  onSelectOption={(opt) => setReassignDriverName(opt.name)}
+                  options={reassignDriverCandidates.map((d) => ({
+                    id: d.name,
+                    name: d.name,
+                    sublabel: d.label,
+                    badge: d.label.includes("Chauffeur")
+                      ? "Chauffeur"
+                      : d.label.includes("Coordinator")
+                      ? "Coordinator"
+                      : d.label.includes("Executive")
+                      ? "Executive"
+                      : "Attendee",
+                  }))}
                   placeholder="Search attendee, executive, or chauffeur..."
                   className="h-10 text-xs font-medium"
                 />
-                <datalist id="reassign-driver-autocomplete-list">
-                  {reassignDriverCandidates.map((d) => (
-                    <option key={d.name} value={d.name} label={d.label} />
-                  ))}
-                </datalist>
 
                 {/* Quick select pills */}
                 <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
