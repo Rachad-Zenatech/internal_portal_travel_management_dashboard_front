@@ -167,5 +167,21 @@ export const travelService = {
     ),
   deleteVehicle: (vehicleId: string) =>
     apiClient.delete<{ message: string }>(`/api/travel/vehicles/${vehicleId}`),
+
+  // Trip Calendar & Meeting Spots (Today & Tomorrow Schedule)
+  getCalendarSchedule: (params?: { eventId?: string; userEmail?: string; isAdminOverride?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.eventId && params.eventId !== "all") q.append("event_id", params.eventId);
+    if (params?.userEmail) q.append("user_email", params.userEmail);
+    if (params?.isAdminOverride) q.append("is_admin_override", "true");
+    const qs = q.toString();
+    return apiClient.get<import("@/types/travel").TripScheduleResponse>(
+      qs ? `/api/travel/calendar/schedule?${qs}` : "/api/travel/calendar/schedule"
+    );
+  },
+  createScheduleItem: (payload: Partial<import("@/types/travel").EventScheduleItem>) =>
+    apiClient.post<import("@/types/travel").EventScheduleItem>("/api/travel/calendar/schedule", payload),
+  deleteScheduleItem: (itemId: string) =>
+    apiClient.delete<{ message: string }>(`/api/travel/calendar/schedule/${itemId}`),
 };
 

@@ -406,3 +406,34 @@ export interface VehicleSpecLookupResult {
   default_seat_layout: VehicleSeatRow[];
 }
 
+export interface EventScheduleItem {
+  id: string;
+  event_id: string;
+  schedule_date: string;
+  start_time: string;
+  end_time?: string | null;
+  title: string;
+  activity_type: "meeting" | "transport" | "flight_test" | "dogfight" | "dinner" | "briefing" | string;
+  meeting_spot: string;
+  meeting_spot_instructions?: string | null;
+  assigned_vehicle_name?: string | null;
+  target_audience: string;
+  coordinator_name: string;
+  notes?: string | null;
+  event_title?: string | null;
+  event_location?: string | null;
+  event_start_date?: string | null;
+  event_end_date?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface TripScheduleResponse {
+  today_date: string;
+  tomorrow_date: string;
+  today_items: EventScheduleItem[];
+  tomorrow_items: EventScheduleItem[];
+  all_items: EventScheduleItem[];
+  total_items: number;
+}
+

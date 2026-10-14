@@ -29,6 +29,7 @@ const AirCanadaSyncPage = lazy(() => import("./pages/Travel/AirCanadaSyncPage"))
 const WeeklyTravelMatrixPage = lazy(() => import("./pages/Travel/WeeklyTravelMatrixPage"));
 const ExecutiveProfilesPage = lazy(() => import("./pages/Travel/ExecutiveProfilesPage"));
 const VehicleLibraryPage = lazy(() => import("./pages/Travel/VehicleLibraryPage"));
+const TravelCalendarPage = lazy(() => import("./pages/Travel/TravelCalendarPage"));
 
 function NotFoundAlert() {
   return (
@@ -88,6 +89,7 @@ function App() {
               <Route path="/travel/stipends" element={<TravelStipendPage />} />
               <Route path="/travel/drone-cargo" element={<DroneCargoPage />} />
               <Route path="/travel/vehicles" element={<VehicleLibraryPage />} />
+              <Route path="/travel/calendar" element={<TravelCalendarPage />} />
 
               {/* Configuration Routes */}
               <Route path="/configuration" element={<Navigate to="/configurations/users" replace />} />
