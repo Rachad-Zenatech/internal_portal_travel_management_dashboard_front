@@ -42,6 +42,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  ALL_VEHICLE_MAKES,
+  getModelsForMake,
+  getDefaultRateForMake,
+  resolveVehicleSpecs,
+} from "@/data/vehicleCatalog";
 
 const EXECUTIVE_TRAVELERS = [
   "Michael Vance (CEO)",
@@ -221,21 +227,6 @@ const FLEET_PRESETS: FleetPreset[] = [
   },
 ];
 
-const COMMON_MAKES = [
-  "Chevrolet",
-  "Cadillac",
-  "GMC",
-  "Ford",
-  "Lincoln",
-  "Mercedes-Benz",
-  "Toyota",
-  "Chrysler",
-  "Tesla",
-  "Audi",
-  "BMW",
-  "Nissan",
-];
-
 const COMMON_MODELS = [
   "Suburban High Country",
   "Tahoe Premier",
@@ -355,6 +346,7 @@ export default function VehicleLibraryPage() {
   const [selectedPresetIndex, setSelectedPresetIndex] = useState<string>("");
   const [isAutoDetectingSpecs, setIsAutoDetectingSpecs] = useState(false);
   const [autoDetectNotice, setAutoDetectNotice] = useState<string | null>(null);
+  const [dynamicNhtsaModels, setDynamicNhtsaModels] = useState<string[]>([]);
 
   const [newVehicle, setNewVehicle] = useState({
     vehicle_name: "Executive Suburban 1",
@@ -372,6 +364,107 @@ export default function VehicleLibraryPage() {
     status: "active_on_road" as const,
     seat_layout: undefined as any,
   });
+
+  // Current make benchmark rate information
+  const currentMakeRateInfo = getDefaultRateForMake(newVehicle.make);
+
+  // Available models for currently selected make
+  const catalogModelsForMake = getModelsForMake(newVehicle.make);
+  const availableModelOptions = Array.from(
+    new Set([
+      ...catalogModelsForMake.map((m) => m.model),
+      ...dynamicNhtsaModels,
+      ...COMMON_MODELS,
+    ])
+  );
+
+  // 1. User types or chooses Make -> automatically suggests rate & loads models
+  const handleMakeChange = (makeVal: string) => {
+    const rateData = getDefaultRateForMake(makeVal);
+    setNewVehicle((prev) => ({
+      ...prev,
+      make: makeVal,
+      daily_rate_usd: rateData.defaultDailyRate,
+      total_cost_usd: rateData.defaultDailyRate * 5,
+    }));
+
+    // Dynamically fetch NHTSA models for this make if length >= 3
+    if (makeVal.trim().length >= 3) {
+      travelService
+        .getVehicleModels(makeVal.trim())
+        .then((models) => {
+          if (Array.isArray(models) && models.length > 0) {
+            setDynamicNhtsaModels(models);
+          }
+        })
+        .catch(() => {});
+    } else {
+      setDynamicNhtsaModels([]);
+    }
+
+    setAutoDetectNotice(
+      `⚡ Make set to ${makeVal}: Benchmark Rate is $${rateData.defaultDailyRate}/day (${rateData.rateRange}). Pick or type a model below to auto-populate seating capacity!`
+    );
+  };
+
+  // 2. User types or chooses Model -> AUTOMATICALLY sets seating capacity & cargo!
+  const handleModelChange = (modelVal: string) => {
+    const cleanModel = modelVal.trim();
+    const resolved = resolveVehicleSpecs(newVehicle.make, cleanModel);
+
+    if (resolved && cleanModel.length >= 2) {
+      setNewVehicle((prev) => ({
+        ...prev,
+        model: modelVal,
+        seating_capacity: resolved.seats,
+        cargo_cases_capacity: resolved.cargoCases,
+        vehicle_class: resolved.vehicleClass,
+        daily_rate_usd: resolved.dailyRate || prev.daily_rate_usd,
+        total_cost_usd: (resolved.dailyRate || prev.daily_rate_usd) * 5,
+        rental_agency: resolved.agency || prev.rental_agency,
+        vehicle_name:
+          prev.vehicle_name === "Executive Suburban 1" || !prev.vehicle_name.trim()
+            ? `${newVehicle.make || ""} ${cleanModel} 1`.trim()
+            : prev.vehicle_name,
+      }));
+
+      setAutoDetectNotice(
+        `✓ Auto-detected: ${resolved.seats} Seats • ${resolved.cargoCases} Pelican Cases • ${resolved.vehicleClass} • $${resolved.dailyRate}/day`
+      );
+    } else {
+      setNewVehicle((prev) => ({
+        ...prev,
+        model: modelVal,
+      }));
+    }
+
+    // Debounced live NHTSA query for custom or specific trims
+    if (newVehicle.make && cleanModel.length >= 3) {
+      const timer = setTimeout(async () => {
+        try {
+          const live = await travelService.lookupVehicleSpecs({
+            make: newVehicle.make,
+            model: cleanModel,
+          });
+          if (live && live.amount_of_seats) {
+            setNewVehicle((prev) => ({
+              ...prev,
+              seating_capacity: live.amount_of_seats,
+              cargo_cases_capacity: live.cargo_pelican_capacity,
+              vehicle_class: live.vehicle_class,
+              seat_layout: live.default_seat_layout,
+            }));
+            setAutoDetectNotice(
+              `✓ Library Spec Confirmed: ${live.amount_of_seats} Seats • ${live.cargo_pelican_capacity} Pelican Cases • ${live.seat_configuration}`
+            );
+          }
+        } catch {
+          // Keep local catalog result
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  };
 
   const handleSelectPreset = (indexStr: string) => {
     setSelectedPresetIndex(indexStr);
@@ -1567,60 +1660,107 @@ export default function VehicleLibraryPage() {
               />
             </div>
             <div>
-              <Label className="text-xs font-medium">Make</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Make</Label>
+                <span className="text-[11px] text-muted-foreground font-medium">
+                  {ALL_VEHICLE_MAKES.length}+ Global Brands
+                </span>
+              </div>
               <Input
-                list="preset-makes-list"
+                list="all-vehicle-makes-list"
                 value={newVehicle.make}
-                onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
+                onChange={(e) => handleMakeChange(e.target.value)}
                 className="mt-1 h-10"
-                placeholder="e.g. Chevrolet"
+                placeholder="e.g. Chevrolet, Ford, Cadillac..."
               />
-              <datalist id="preset-makes-list">
-                {COMMON_MAKES.map((m) => (
+              <datalist id="all-vehicle-makes-list">
+                {ALL_VEHICLE_MAKES.map((m) => (
                   <option key={m} value={m} />
                 ))}
               </datalist>
+              <div className="flex items-center justify-between mt-1 text-[11px] text-muted-foreground">
+                <span>⚡ Rate benchmark:</span>
+                <span className="font-semibold text-primary">
+                  ${currentMakeRateInfo.defaultDailyRate}/day ({currentMakeRateInfo.rateRange})
+                </span>
+              </div>
             </div>
             <div>
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium">Model</Label>
-                <button
-                  type="button"
-                  onClick={() => handleAutoDetectSpecs()}
-                  disabled={isAutoDetectingSpecs}
-                  className="text-xs text-primary hover:underline flex items-center gap-1 font-semibold disabled:opacity-50"
-                  title="Query Vehicle Spec Library for Seating & Pelican Capacity"
-                >
-                  <Sparkles className="h-3.5 w-3.5" />
-                  {isAutoDetectingSpecs ? "Detecting..." : "Auto-Detect Specs"}
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                    ⚡ Auto-sets seats & cargo
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleAutoDetectSpecs()}
+                    disabled={isAutoDetectingSpecs}
+                    className="text-xs text-primary hover:underline flex items-center gap-1 font-semibold disabled:opacity-50"
+                    title="Query Vehicle Spec Library for Seating & Pelican Capacity"
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    {isAutoDetectingSpecs ? "Detecting..." : "Detect"}
+                  </button>
+                </div>
               </div>
               <Input
-                list="preset-models-list"
+                list="dynamic-models-list"
                 value={newVehicle.model}
-                onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
+                onChange={(e) => handleModelChange(e.target.value)}
                 className="mt-1 h-10"
-                placeholder="e.g. Suburban High Country"
+                placeholder={
+                  newVehicle.make
+                    ? `Pick or type a ${newVehicle.make} model...`
+                    : "e.g. Suburban High Country"
+                }
               />
-              <datalist id="preset-models-list">
-                {COMMON_MODELS.map((m) => (
-                  <option key={m} value={m} />
+              <datalist id="dynamic-models-list">
+                {/* 1. Curated models for this make with detailed capacity badges */}
+                {catalogModelsForMake.map((m) => (
+                  <option
+                    key={m.model}
+                    value={m.model}
+                    label={`${m.seats} Seats • ${m.cargoCases} Pelican Cases • $${m.dailyRate}/day`}
+                  />
                 ))}
+                {/* 2. Additional models from catalog and NHTSA API */}
+                {availableModelOptions
+                  .filter((dm) => !catalogModelsForMake.some((cm) => cm.model.toLowerCase() === dm.toLowerCase()))
+                  .map((dm) => (
+                    <option key={dm} value={dm} label={`${newVehicle.make} Model`} />
+                  ))}
               </datalist>
+              <div className="flex items-center justify-between mt-1 text-[11px] text-muted-foreground">
+                <span>Selected:</span>
+                <span className="font-semibold text-foreground">
+                  {newVehicle.model || "None selected"} ({newVehicle.seating_capacity} Seats)
+                </span>
+              </div>
             </div>
             <div>
-              <Label className="text-xs font-medium">Seating Capacity (Amount of Seats)</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Seating Capacity (Amount of Seats)</Label>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-500/10 px-1.5 py-0.5 rounded">
+                  ✓ Auto-set ({newVehicle.seating_capacity} Seats)
+                </span>
+              </div>
               <Input
                 type="number"
                 min={2}
                 max={20}
                 value={newVehicle.seating_capacity}
                 onChange={(e) => setNewVehicle({ ...newVehicle, seating_capacity: parseInt(e.target.value) || 7 })}
-                className="mt-1 h-10"
+                className="mt-1 h-10 font-semibold"
               />
             </div>
             <div>
-              <Label className="text-xs font-medium">Cargo Cases Capacity</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Cargo Cases Capacity</Label>
+                <span className="text-[10px] text-muted-foreground font-medium">
+                  Pelican / Flight Cases
+                </span>
+              </div>
               <Input
                 type="number"
                 min={0}
@@ -1649,8 +1789,14 @@ export default function VehicleLibraryPage() {
               />
             </div>
             <div>
-              <Label className="text-xs font-medium">Daily Rate ($ USD)</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Daily Rate ($ USD)</Label>
+                <span className="text-[11px] text-primary font-medium">
+                  ⚡ Auto-suggested
+                </span>
+              </div>
               <Input
+                list="suggested-rates-list"
                 type="number"
                 value={newVehicle.daily_rate_usd}
                 onChange={(e) => {
@@ -1659,6 +1805,15 @@ export default function VehicleLibraryPage() {
                 }}
                 className="mt-1 h-10"
               />
+              <datalist id="suggested-rates-list">
+                {currentMakeRateInfo.suggestedRates.map((r, i) => (
+                  <option
+                    key={r}
+                    value={r}
+                    label={`$${r}/day (${i === 0 ? "Fleet Discount" : i === 1 ? "Standard Corporate" : i === 2 ? "High Demand" : "VIP Chauffeur"})`}
+                  />
+                ))}
+              </datalist>
             </div>
             <div>
               <Label className="text-xs font-medium">Total Est. Cost ($ USD)</Label>

@@ -157,6 +157,8 @@ export const travelService = {
       `/api/travel/vehicles/lookup-specs?${query.toString()}`
     );
   },
+  getVehicleModels: (make: string) =>
+    apiClient.get<string[]>(`/api/travel/vehicles/models?make=${encodeURIComponent(make)}`),
   assignVehicleSeat: (
     vehicleId: string,
     payload: { passenger_name: string; row_number: number; seat_position: string; action: "assign" | "unassign" }
