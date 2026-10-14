@@ -11,8 +11,13 @@ import {
   Plane,
   Hotel,
   Package,
+  Luggage,
   Sparkles,
+  ShieldCheck,
+  AlertTriangle,
+  Scale,
 } from "lucide-react";
+import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +38,29 @@ export default function TravelEventsPage() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isAddAttendeeModalOpen, setIsAddAttendeeModalOpen] = useState(false);
+  const [isAddLuggageModalOpen, setIsAddLuggageModalOpen] = useState(false);
+
+  // Form states for new special luggage
+  const [lugCaseCode, setLugCaseCode] = useState("PEL-1650-01");
+  const [lugCaseName, setLugCaseName] = useState("Pelican 1650 Drone Frame Case");
+  const [lugClassification, setLugClassification] = useState("oversized_hard_case");
+  const [lugCarrierAirline, setLugCarrierAirline] = useState("Delta Air Lines");
+  const [lugBaggageTag, setLugBaggageTag] = useState("");
+  const [lugTrackingNo, setLugTrackingNo] = useState("");
+  const [lugDimensions, setLugDimensions] = useState("75 x 48 x 32");
+  const [lugGrossWeightKg, setLugGrossWeightKg] = useState(21.5);
+  const [lugMaxAllowanceKg, setLugMaxAllowanceKg] = useState(23.0);
+  const [lugExcessFee, setLugExcessFee] = useState(0.0);
+  const [lugIataLipoCompliant, setLugIataLipoCompliant] = useState(true);
+  const [lugCarnet, setLugCarnet] = useState("");
+  const [lugCustodianName, setLugCustodianName] = useState("");
+  const [lugCustodianEmail, setLugCustodianEmail] = useState("");
+  const [lugStatus, setLugStatus] = useState<
+    "packed" | "checked_in" | "in_transit" | "customs_inspected" | "delivered_at_venue" | "returned"
+  >("packed");
+  const [lugHandlingInstructions, setLugHandlingInstructions] = useState(
+    "Fragile carbon-fiber combat frames. Keep upright in climate-controlled cargo."
+  );
 
   // Form states for new event
   const [newTitle, setNewTitle] = useState("");
@@ -103,6 +131,33 @@ export default function TravelEventsPage() {
     },
   });
 
+  const createLuggageMutation = useMutation({
+    mutationFn: travelService.createSpecialLuggage,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["travelEventDetails", selectedEventId] });
+      queryClient.invalidateQueries({ queryKey: ["specialLuggage"] });
+      queryClient.invalidateQueries({ queryKey: ["travelDashboardSummary"] });
+      setIsAddLuggageModalOpen(false);
+      resetLuggageForm();
+      toast.success("Special luggage added to event manifest!");
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || "Failed to add special luggage");
+    },
+  });
+
+  const deleteLuggageMutation = useMutation({
+    mutationFn: travelService.deleteSpecialLuggage,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["travelEventDetails", selectedEventId] });
+      queryClient.invalidateQueries({ queryKey: ["specialLuggage"] });
+      toast.success("Special luggage removed");
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || "Failed to remove luggage");
+    },
+  });
+
   const resetEventForm = () => {
     setNewTitle("");
     setNewEventType("drone_combat");
@@ -124,6 +179,52 @@ export default function TravelEventsPage() {
     setAttStipend(450.0);
     setAttLuggage("");
     setAttNotes("");
+  };
+
+  const resetLuggageForm = () => {
+    setLugCaseCode(`PEL-${Math.floor(1000 + Math.random() * 9000)}`);
+    setLugCaseName("Pelican 1650 Drone Frame Case");
+    setLugClassification("oversized_hard_case");
+    setLugCarrierAirline("Delta Air Lines");
+    setLugBaggageTag("");
+    setLugTrackingNo("");
+    setLugDimensions("75 x 48 x 32");
+    setLugGrossWeightKg(21.5);
+    setLugMaxAllowanceKg(23.0);
+    setLugExcessFee(0.0);
+    setLugIataLipoCompliant(true);
+    setLugCarnet("");
+    setLugCustodianName("");
+    setLugCustodianEmail("");
+    setLugStatus("packed");
+    setLugHandlingInstructions("Fragile electronics. Keep upright in climate-controlled cargo.");
+  };
+
+  const handleCreateLuggage = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedEventId) {
+      toast.error("Please select an expedition event first");
+      return;
+    }
+    createLuggageMutation.mutate({
+      event_id: selectedEventId,
+      case_code: lugCaseCode,
+      case_name: lugCaseName,
+      luggage_classification: lugClassification,
+      carrier_airline: lugCarrierAirline,
+      baggage_tag_number: lugBaggageTag,
+      tracking_number: lugTrackingNo,
+      dimensions_cm: lugDimensions,
+      gross_weight_kg: Number(lugGrossWeightKg),
+      max_airline_allowance_kg: Number(lugMaxAllowanceKg),
+      excess_baggage_fee: Number(lugExcessFee),
+      iata_lipo_compliant: Boolean(lugIataLipoCompliant),
+      carnet_customs_declaration: lugCarnet,
+      custodian_name: lugCustodianName || (eventDetails?.event?.coordinator_name || "Alex Rivera"),
+      custodian_email: lugCustodianEmail,
+      status: lugStatus,
+      handling_instructions: lugHandlingInstructions,
+    });
   };
 
   const handleCreateEvent = (e: React.FormEvent) => {
@@ -328,10 +429,23 @@ export default function TravelEventsPage() {
                         ${(eventDetails.budgets?.[0]?.total_allocated || 0).toLocaleString()}
                       </span>
                     </div>
-                    <div>
-                      <span className="text-muted-foreground block text-[11px]">Special Luggage</span>
-                      <span className="font-medium text-indigo-600 dark:text-indigo-400">
-                        {eventDetails.special_luggage?.length || 0} Hard Cases
+                    <div
+                      onClick={() => setIsAddLuggageModalOpen(true)}
+                      className="cursor-pointer p-1.5 -m-1.5 rounded-lg border border-transparent hover:border-indigo-500/30 hover:bg-indigo-500/10 transition-all group"
+                      title="Click to register special luggage for this expedition"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground block text-[11px] group-hover:text-indigo-600 dark:group-hover:text-indigo-400 font-medium transition-colors">
+                          Special Luggage
+                        </span>
+                        <Plus className="w-3 h-3 text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
+                      <span className="font-semibold text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5 mt-0.5">
+                        <Luggage className="w-3.5 h-3.5" />
+                        <span>{eventDetails.special_luggage?.length || 0} Hard Cases</span>
+                        <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-500/10 px-1.5 py-0.2 rounded border border-indigo-500/20 ml-1">
+                          + Add
+                        </span>
                       </span>
                     </div>
                   </div>
@@ -422,6 +536,165 @@ export default function TravelEventsPage() {
                               variant="ghost"
                               onClick={() => removeAttendeeMutation.mutate(attendee.id)}
                               className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Special Luggage & Hard Case Manifest Section */}
+              <Card className="border-border shadow-xs">
+                <CardHeader className="pb-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <CardTitle className="text-base font-semibold flex items-center gap-2">
+                        <Luggage className="w-4 h-4 text-indigo-500" />
+                        <span>Special Luggage & Hard Case Manifest</span>
+                      </CardTitle>
+                      <CardDescription className="text-xs">
+                        Pelican flight cases, LiPo containment boxes, and sensitive drone telemetry equipment registered for this expedition.
+                      </CardDescription>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => setIsAddLuggageModalOpen(true)}
+                      className="gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white self-start sm:self-auto shrink-0 shadow-xs"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Special Luggage</span>
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  {(!eventDetails.special_luggage || eventDetails.special_luggage.length === 0) ? (
+                    <div className="p-8 text-center border border-dashed rounded-lg flex flex-col items-center justify-center gap-2 bg-muted/20">
+                      <Luggage className="w-8 h-8 text-muted-foreground/50" />
+                      <p className="text-sm font-medium text-foreground">No special luggage logged yet</p>
+                      <p className="text-xs text-muted-foreground max-w-md">
+                        Assign flight hard cases, lithium battery containment boxes, or drone telemetry gear directly to this expedition manifest.
+                      </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setIsAddLuggageModalOpen(true)}
+                        className="mt-2 text-xs gap-1.5"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>Register First Hard Case</span>
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-border">
+                      {eventDetails.special_luggage.map((lug) => (
+                        <div
+                          key={lug.id}
+                          className="py-3.5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="space-y-1.5 flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-mono font-semibold px-2 py-0.5 rounded text-[11px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800">
+                                {lug.case_code}
+                              </span>
+                              <span className="font-semibold text-foreground text-sm">
+                                {lug.case_name}
+                              </span>
+                              <Badge
+                                variant="outline"
+                                className="text-[10px] uppercase font-medium bg-secondary text-secondary-foreground"
+                              >
+                                {lug.luggage_classification.replace(/_/g, " ")}
+                              </Badge>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  lug.iata_lipo_compliant
+                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-300 dark:border-emerald-800 flex items-center gap-1"
+                                    : "bg-amber-500/10 text-amber-600 border-amber-300 dark:border-amber-800 flex items-center gap-1"
+                                }
+                              >
+                                {lug.iata_lipo_compliant ? (
+                                  <>
+                                    <ShieldCheck className="w-3 h-3" />
+                                    <span>IATA LiPo Compliant</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <AlertTriangle className="w-3 h-3" />
+                                    <span>Check LiPo Req</span>
+                                  </>
+                                )}
+                              </Badge>
+                              <Badge
+                                variant="outline"
+                                className={
+                                  lug.status === "delivered_at_venue" || lug.status === "customs_inspected"
+                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-300 dark:border-emerald-800"
+                                    : lug.status === "in_transit"
+                                    ? "bg-blue-500/10 text-blue-600 border-blue-300 dark:border-blue-800"
+                                    : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-300 dark:border-slate-700"
+                                }
+                              >
+                                {lug.status.replace(/_/g, " ").toUpperCase()}
+                              </Badge>
+                            </div>
+
+                            <div className="text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                              {lug.carrier_airline && (
+                                <span className="inline-flex items-center gap-1 text-foreground/80">
+                                  <Plane className="w-3 h-3 text-sky-500" />
+                                  <span>{lug.carrier_airline}</span>
+                                </span>
+                              )}
+                              {lug.baggage_tag_number && (
+                                <span>Tag: <span className="font-mono text-foreground/90 font-medium">{lug.baggage_tag_number}</span></span>
+                              )}
+                              {lug.tracking_number && (
+                                <span>Tracking: <span className="font-mono text-foreground/90">{lug.tracking_number}</span></span>
+                              )}
+                              {lug.dimensions_cm && (
+                                <span>Dims: {lug.dimensions_cm} cm</span>
+                              )}
+                              {lug.custodian_name && (
+                                <span>Custodian: <strong className="text-foreground/90">{lug.custodian_name}</strong></span>
+                              )}
+                              {lug.carnet_customs_declaration && (
+                                <span>Carnet: <span className="font-mono text-foreground/90">{lug.carnet_customs_declaration}</span></span>
+                              )}
+                            </div>
+
+                            {lug.handling_instructions && (
+                              <p className="text-[11px] text-muted-foreground/90 italic bg-accent/40 px-2 py-1 rounded inline-block">
+                                Instructions: {lug.handling_instructions}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-4 self-end lg:self-center shrink-0">
+                            <div className="text-right">
+                              <span className="text-[11px] text-muted-foreground block flex items-center justify-end gap-1">
+                                <Scale className="w-3 h-3" />
+                                Gross Weight
+                              </span>
+                              <span className={`font-semibold text-sm ${lug.gross_weight_kg > lug.max_airline_allowance_kg ? 'text-rose-500' : 'text-foreground'}`}>
+                                {lug.gross_weight_kg} kg
+                              </span>
+                              <span className="text-[10px] text-muted-foreground block">
+                                max {lug.max_airline_allowance_kg} kg
+                                {lug.excess_baggage_fee > 0 && ` (+$${lug.excess_baggage_fee})`}
+                              </span>
+                            </div>
+
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => deleteLuggageMutation.mutate(lug.id)}
+                              className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
+                              title="Delete Special Luggage"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </Button>
@@ -670,6 +943,229 @@ export default function TravelEventsPage() {
               </Button>
               <Button type="submit" disabled={addAttendeeMutation.isPending} className="text-xs">
                 {addAttendeeMutation.isPending ? "Adding..." : "Add Attendee"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal: Add Special Luggage */}
+      <Dialog open={isAddLuggageModalOpen} onOpenChange={setIsAddLuggageModalOpen}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Luggage className="w-5 h-5 text-indigo-500" />
+              <span>Add Special Luggage & Flight Hard Cases</span>
+            </DialogTitle>
+            <DialogDescription>
+              Register Pelican cases, LiPo battery containment boxes, or sensitive telemetry gear for this expedition.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateLuggage} className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Case Code / Asset ID</Label>
+                <Input
+                  required
+                  value={lugCaseCode}
+                  onChange={(e) => setLugCaseCode(e.target.value)}
+                  placeholder="e.g. PEL-1650-01"
+                  className="text-xs font-mono"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Case Name / Descriptor</Label>
+                <Input
+                  required
+                  value={lugCaseName}
+                  onChange={(e) => setLugCaseName(e.target.value)}
+                  placeholder="e.g. Pelican 1650 Drone Frame Case"
+                  className="text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Luggage Classification</Label>
+                <select
+                  value={lugClassification}
+                  onChange={(e) => setLugClassification(e.target.value)}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs"
+                >
+                  <option value="oversized_hard_case">Oversized Hard Case (Pelican)</option>
+                  <option value="lithium_battery_box">Lithium LiPo Battery Box</option>
+                  <option value="fragile_telemetry_unit">Fragile Telemetry / Avionics Unit</option>
+                  <option value="spare_parts_container">Spare Parts & Tool Container</option>
+                  <option value="ground_station_rack">Ground Station Command Rack</option>
+                </select>
+              </div>
+              <div>
+                <Label className="text-xs">Carrier Airline</Label>
+                <Input
+                  value={lugCarrierAirline}
+                  onChange={(e) => setLugCarrierAirline(e.target.value)}
+                  placeholder="e.g. Delta Air Lines / United"
+                  className="text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Baggage Tag # (Air Waybill)</Label>
+                <Input
+                  value={lugBaggageTag}
+                  onChange={(e) => setLugBaggageTag(e.target.value)}
+                  placeholder="e.g. DL-7821902"
+                  className="text-xs font-mono"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Tracking Number</Label>
+                <Input
+                  value={lugTrackingNo}
+                  onChange={(e) => setLugTrackingNo(e.target.value)}
+                  placeholder="e.g. 1Z9999999999999999"
+                  className="text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs">Dimensions (L x W x H cm)</Label>
+                <Input
+                  value={lugDimensions}
+                  onChange={(e) => setLugDimensions(e.target.value)}
+                  placeholder="e.g. 75 x 48 x 32"
+                  className="text-xs"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Gross Weight (kg)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  required
+                  value={lugGrossWeightKg}
+                  onChange={(e) => setLugGrossWeightKg(Number(e.target.value))}
+                  className="text-xs"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Airline Allowance (kg)</Label>
+                <Input
+                  type="number"
+                  step="0.1"
+                  value={lugMaxAllowanceKg}
+                  onChange={(e) => setLugMaxAllowanceKg(Number(e.target.value))}
+                  className="text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Excess Baggage Fee ($)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={lugExcessFee}
+                  onChange={(e) => setLugExcessFee(Number(e.target.value))}
+                  placeholder="0.00"
+                  className="text-xs"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Manifest Status</Label>
+                <select
+                  value={lugStatus}
+                  onChange={(e) => setLugStatus(e.target.value as any)}
+                  className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs"
+                >
+                  <option value="packed">Packed & Sealed</option>
+                  <option value="checked_in">Checked In at Counter</option>
+                  <option value="in_transit">In Transit (Air Cargo)</option>
+                  <option value="customs_inspected">Customs Inspected</option>
+                  <option value="delivered_at_venue">Delivered at Venue</option>
+                  <option value="returned">Returned / Repatriated</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Custodian Name</Label>
+                <Input
+                  value={lugCustodianName}
+                  onChange={(e) => setLugCustodianName(e.target.value)}
+                  placeholder={eventDetails?.event?.coordinator_name || "Responsible Pilot / Lead"}
+                  className="text-xs"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Custodian Email</Label>
+                <Input
+                  type="email"
+                  value={lugCustodianEmail}
+                  onChange={(e) => setLugCustodianEmail(e.target.value)}
+                  placeholder="custodian@zenatech.com"
+                  className="text-xs"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 items-center">
+              <div>
+                <Label className="text-xs">ATA Carnet / Customs Declaration</Label>
+                <Input
+                  value={lugCarnet}
+                  onChange={(e) => setLugCarnet(e.target.value)}
+                  placeholder="e.g. US-CARNET-2026-99"
+                  className="text-xs"
+                />
+              </div>
+              <div className="pt-4 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="iata_compliance"
+                  checked={lugIataLipoCompliant}
+                  onChange={(e) => setLugIataLipoCompliant(e.target.checked)}
+                  className="rounded border-input text-indigo-600 focus:ring-indigo-500 h-4 w-4"
+                />
+                <Label htmlFor="iata_compliance" className="text-xs font-medium cursor-pointer">
+                  IATA DGR LiPo Battery Compliant (&lt;100Wh)
+                </Label>
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs">Special Handling Instructions</Label>
+              <Textarea
+                rows={2}
+                value={lugHandlingInstructions}
+                onChange={(e) => setLugHandlingInstructions(e.target.value)}
+                placeholder="Fragile carbon-fiber combat frames. Keep upright in climate-controlled cargo."
+                className="text-xs"
+              />
+            </div>
+
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsAddLuggageModalOpen(false)}
+                className="text-xs"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={createLuggageMutation.isPending}
+                className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                {createLuggageMutation.isPending ? "Registering..." : "Add to Manifest"}
               </Button>
             </DialogFooter>
           </form>
