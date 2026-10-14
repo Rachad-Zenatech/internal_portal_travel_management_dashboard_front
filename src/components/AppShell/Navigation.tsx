@@ -34,6 +34,7 @@ export const navigation: NavigationItem[] = [
     icon: Plane,
     section: "TRAVEL OPERATIONS",
     subItems: [
+      { label: "Flight Explorer", path: "/travel/flights", navigationCode: "FLIGHT_EXPLORER" },
       { label: "AI Travel Assistant", path: "/travel/ai-assistant" },
       { label: "Weekly 20–30 Matrix", path: "/travel/weekly-matrix" },
       { label: "Air Canada Live Sync", path: "/travel/scraper-sync" },
