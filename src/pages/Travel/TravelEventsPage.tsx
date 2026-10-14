@@ -25,6 +25,12 @@ import {
   UserCheck,
   CheckCheck,
   LogOut,
+  Copy,
+  Check,
+  ArrowRight,
+  Ticket,
+  Search,
+  Edit3,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/lib/AuthContext";
@@ -93,6 +99,22 @@ export default function TravelEventsPage() {
   const [attLuggage, setAttLuggage] = useState("");
   const [attNotes, setAttNotes] = useState("");
 
+  // Flight Manifest & Co-Traveler Plane States
+  const [flightSearchTerm, setFlightSearchTerm] = useState("");
+  const [flightFilterAirline, setFlightFilterAirline] = useState<string>("all");
+  const [isEditFlightModalOpen, setIsEditFlightModalOpen] = useState(false);
+  const [editingAttendee, setEditingAttendee] = useState<EventAttendee | null>(null);
+  const [editCarrierAirline, setEditCarrierAirline] = useState("Air Canada");
+  const [editFlightNumbers, setEditFlightNumbers] = useState("");
+  const [editSeatAssignment, setEditSeatAssignment] = useState("");
+  const [editBookingRef, setEditBookingRef] = useState("");
+  const [editOriginCity, setEditOriginCity] = useState("");
+  const [editDestinationCity, setEditDestinationCity] = useState("");
+  const [editLodging, setEditLodging] = useState("");
+  const [activeManifestTab, setActiveManifestTab] = useState<"flights" | "roster">("flights");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [viewingAsAttendeeId, setViewingAsAttendeeId] = useState<string | null>(null);
+
   const { user } = useAuth();
   const [broadcastVehicle, setBroadcastVehicle] = useState<any>(null);
   const [isBroadcastModalOpen, setIsBroadcastModalOpen] = useState(false);
@@ -148,6 +170,56 @@ export default function TravelEventsPage() {
       toast.error(err?.response?.data?.detail || "Failed to check in to vehicle");
     },
   });
+
+  const updateFlightMutation = useMutation({
+    mutationFn: ({ attendeeId, payload }: { attendeeId: string; payload: any }) =>
+      travelService.updateAttendeeFlight(attendeeId, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["travelEventDetails", selectedEventId] });
+      queryClient.invalidateQueries({ queryKey: ["travelEvents"] });
+      setIsEditFlightModalOpen(false);
+      toast.success("Flight booking and plane info updated!");
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || "Failed to update flight booking");
+    },
+  });
+
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedId(id);
+    toast.success("Flight information copied to clipboard!");
+    setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  const handleOpenEditFlight = (att: EventAttendee) => {
+    setEditingAttendee(att);
+    setEditCarrierAirline(att.carrier_airline || "Air Canada");
+    setEditFlightNumbers(att.flight_numbers || att.flight_details || "");
+    setEditSeatAssignment(att.seat_assignment || "");
+    setEditBookingRef(att.booking_reference || "");
+    setEditOriginCity(att.origin_city || "");
+    setEditDestinationCity(att.destination_city || eventDetails?.event?.location || "");
+    setEditLodging(att.lodging_details || "");
+    setIsEditFlightModalOpen(true);
+  };
+
+  const handleSubmitEditFlight = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAttendee) return;
+    updateFlightMutation.mutate({
+      attendeeId: editingAttendee.id,
+      payload: {
+        carrier_airline: editCarrierAirline,
+        flight_numbers: editFlightNumbers,
+        seat_assignment: editSeatAssignment,
+        booking_reference: editBookingRef,
+        origin_city: editOriginCity,
+        destination_city: editDestinationCity,
+        lodging_details: editLodging,
+      },
+    });
+  };
 
   const handleOpenBroadcastModal = (vehicle: any) => {
     setBroadcastVehicle(vehicle);
@@ -544,102 +616,717 @@ export default function TravelEventsPage() {
                     </div>
                   </div>
                 </CardContent>
-              </Card>
+              </Card>              {/* Trip Flight & Plane Coordination Manifest & Attendee Roster */}
+              {(() => {
+                const allAttendees = eventDetails.attendees || [];
+                const activeViewerAttendee =
+                  allAttendees.find((a) =>
+                    viewingAsAttendeeId
+                      ? a.id === viewingAsAttendeeId
+                      : user?.email && a.attendee_email?.toLowerCase() === user?.email?.toLowerCase()
+                  ) ||
+                  allAttendees.find((a) => a.flight_numbers || a.carrier_airline) ||
+                  allAttendees[0];
 
-              {/* "Who is Going" Attendee Roster */}
-              <Card className="border-border shadow-xs">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-base font-semibold flex items-center gap-2">
-                        <Users className="w-4 h-4 text-primary" />
-                        <span>Attendee Flight & Role Roster ("Who is Going")</span>
-                      </CardTitle>
-                      <CardDescription className="text-xs">
-                        {eventDetails.attendees.length} assigned flight crew, combat pilots, and engineers.
-                      </CardDescription>
-                    </div>
-                    <Badge variant="secondary" className="text-xs">
-                      {eventDetails.attendees.filter((a) => a.attendance_status === "confirmed").length} Confirmed
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  {eventDetails.attendees.length === 0 ? (
-                    <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
-                      No team members added yet. Click "Add Attendee" to roster pilots and crew.
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-border">
-                      {eventDetails.attendees.map((attendee) => (
-                        <div
-                          key={attendee.id}
-                          className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-foreground text-sm">
-                                {attendee.attendee_name}
-                              </span>
-                              <Badge
-                                variant="outline"
-                                className={
-                                  attendee.attendance_status === "confirmed"
-                                    ? "bg-emerald-500/10 text-emerald-600 border-emerald-300 dark:border-emerald-800"
-                                    : "bg-amber-500/10 text-amber-600 border-amber-300 dark:border-amber-800"
-                                }
+                const samePlaneCompanions =
+                  activeViewerAttendee &&
+                  (activeViewerAttendee.flight_numbers || activeViewerAttendee.carrier_airline)
+                    ? allAttendees.filter(
+                        (a) =>
+                          a.id !== activeViewerAttendee.id &&
+                          ((activeViewerAttendee.flight_numbers &&
+                            a.flight_numbers &&
+                            a.flight_numbers.replace(/\s+/g, "").toUpperCase() ===
+                              activeViewerAttendee.flight_numbers.replace(/\s+/g, "").toUpperCase()) ||
+                            (a.carrier_airline &&
+                              activeViewerAttendee.carrier_airline &&
+                              a.carrier_airline.toLowerCase() ===
+                                activeViewerAttendee.carrier_airline.toLowerCase() &&
+                              a.flight_numbers &&
+                              activeViewerAttendee.flight_numbers &&
+                              a.flight_numbers.slice(0, 5) ===
+                                activeViewerAttendee.flight_numbers.slice(0, 5)))
+                      )
+                    : [];
+
+                const attendeesWithFlights = allAttendees.filter(
+                  (a) => a.flight_numbers || a.carrier_airline || a.booking_reference
+                );
+
+                const getAirlineBadgeStyle = (airline?: string | null) => {
+                  const al = (airline || "").toLowerCase();
+                  if (al.includes("delta")) {
+                    return "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-300 dark:border-rose-800";
+                  }
+                  if (al.includes("united")) {
+                    return "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-300 dark:border-sky-800";
+                  }
+                  if (al.includes("air canada")) {
+                    return "bg-red-500/10 text-red-600 dark:text-red-400 border-red-300 dark:border-red-800";
+                  }
+                  if (al.includes("american")) {
+                    return "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800";
+                  }
+                  return "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-300 dark:border-indigo-800";
+                };
+
+                const filteredAttendees = allAttendees.filter((attendee) => {
+                  const matchesSearch =
+                    !flightSearchTerm ||
+                    attendee.attendee_name.toLowerCase().includes(flightSearchTerm.toLowerCase()) ||
+                    attendee.attendee_email.toLowerCase().includes(flightSearchTerm.toLowerCase()) ||
+                    (attendee.carrier_airline &&
+                      attendee.carrier_airline.toLowerCase().includes(flightSearchTerm.toLowerCase())) ||
+                    (attendee.flight_numbers &&
+                      attendee.flight_numbers.toLowerCase().includes(flightSearchTerm.toLowerCase())) ||
+                    (attendee.seat_assignment &&
+                      attendee.seat_assignment.toLowerCase().includes(flightSearchTerm.toLowerCase())) ||
+                    (attendee.booking_reference &&
+                      attendee.booking_reference.toLowerCase().includes(flightSearchTerm.toLowerCase()));
+
+                  if (!matchesSearch) return false;
+
+                  if (flightFilterAirline === "same_plane") {
+                    return (
+                      attendee.id === activeViewerAttendee?.id ||
+                      samePlaneCompanions.some((c) => c.id === attendee.id)
+                    );
+                  }
+                  if (flightFilterAirline !== "all") {
+                    return attendee.carrier_airline
+                      ?.toLowerCase()
+                      .includes(flightFilterAirline.toLowerCase());
+                  }
+                  return true;
+                });
+
+                return (
+                  <Card className="border-border shadow-xs overflow-hidden">
+                    {/* Header with Switchable Tabs */}
+                    <CardHeader className="pb-3 border-b border-border/60 bg-muted/20">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <Plane className="w-5 h-5 text-sky-500" />
+                            <CardTitle className="text-base font-bold text-foreground">
+                              Trip Plane & Flight Coordination Manifest
+                            </CardTitle>
+                            <Badge
+                              variant="outline"
+                              className="bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-300 dark:border-sky-800 text-[11px]"
+                            >
+                              {attendeesWithFlights.length} Flights Booked
+                            </Badge>
+                          </div>
+                          <CardDescription className="text-xs mt-0.5">
+                            Real-time airline bookings, plane numbers, seat assignments, and co-traveler flight schedules for{" "}
+                            <strong>{eventDetails.event.title}</strong>.
+                          </CardDescription>
+                        </div>
+
+                        {/* Navigation Tabs */}
+                        <div className="flex items-center gap-2 self-start md:self-auto">
+                          <div className="flex bg-muted p-1 rounded-lg border border-border text-xs">
+                            <button
+                              type="button"
+                              onClick={() => setActiveManifestTab("flights")}
+                              className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+                                activeManifestTab === "flights"
+                                  ? "bg-background text-foreground shadow-xs"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              <Plane className="w-3.5 h-3.5 text-sky-500" />
+                              <span>Flight Manifest ({attendeesWithFlights.length})</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveManifestTab("roster")}
+                              className={`px-3 py-1.5 rounded-md font-semibold transition-all flex items-center gap-1.5 ${
+                                activeManifestTab === "roster"
+                                  ? "bg-background text-foreground shadow-xs"
+                                  : "text-muted-foreground hover:text-foreground"
+                              }`}
+                            >
+                              <Users className="w-3.5 h-3.5 text-indigo-500" />
+                              <span>Team Roster ({allAttendees.length})</span>
+                            </button>
+                          </div>
+                          <Button
+                            size="sm"
+                            onClick={() => setIsAddAttendeeModalOpen(true)}
+                            className="text-xs h-8 gap-1.5"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Traveler</span>
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+
+                    <CardContent className="pt-4 space-y-5">
+                      {activeManifestTab === "flights" ? (
+                        <>
+                          {/* Viewer's Personal Flight & Boarding Pass Card */}
+                          {activeViewerAttendee && (
+                            <div className="rounded-xl border-2 border-sky-500/30 bg-gradient-to-br from-sky-500/5 via-background to-indigo-500/5 p-4 shadow-xs relative overflow-hidden">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/50">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-9 h-9 rounded-full bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-600 dark:text-sky-400 font-bold shrink-0">
+                                    <Ticket className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">
+                                        Your Flight & Boarding Pass
+                                      </span>
+                                      <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-300">
+                                        Confirmed
+                                      </Badge>
+                                    </div>
+                                    <h4 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                                      <span>{activeViewerAttendee.attendee_name}</span>
+                                      <span className="text-xs font-normal text-muted-foreground">
+                                        ({activeViewerAttendee.role_in_event})
+                                      </span>
+                                    </h4>
+                                  </div>
+                                </div>
+
+                                {/* Traveler Perspective Switcher */}
+                                <div className="flex items-center gap-2 self-start sm:self-auto">
+                                  <span className="text-[11px] text-muted-foreground shrink-0 font-medium">
+                                    Viewing as:
+                                  </span>
+                                  <select
+                                    value={activeViewerAttendee.id}
+                                    onChange={(e) => setViewingAsAttendeeId(e.target.value)}
+                                    className="text-xs rounded-md border border-input bg-background/80 px-2 py-1 shadow-xs focus:ring-1 focus:ring-sky-500"
+                                  >
+                                    {allAttendees.map((a) => (
+                                      <option key={a.id} value={a.id}>
+                                        {a.attendee_name} {a.flight_numbers ? `(${a.carrier_airline || "Flight"} ${a.flight_numbers})` : "(No flight)"}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                              </div>
+
+                              {/* Flight Details Row */}
+                              {activeViewerAttendee.flight_numbers || activeViewerAttendee.carrier_airline ? (
+                                <div className="mt-3.5 space-y-3">
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-card/60 p-3 rounded-lg border border-border/60">
+                                    <div>
+                                      <span className="text-[10px] text-muted-foreground uppercase font-medium block">
+                                        Carrier Airline
+                                      </span>
+                                      <span className="text-xs font-semibold text-foreground flex items-center gap-1 mt-0.5">
+                                        <Badge
+                                          variant="outline"
+                                          className={`text-[10px] font-semibold px-2 py-0.5 ${getAirlineBadgeStyle(
+                                            activeViewerAttendee.carrier_airline
+                                          )}`}
+                                        >
+                                          {activeViewerAttendee.carrier_airline || "Commercial Airline"}
+                                        </Badge>
+                                      </span>
+                                    </div>
+
+                                    <div>
+                                      <span className="text-[10px] text-muted-foreground uppercase font-medium block">
+                                        Flight & Plane
+                                      </span>
+                                      <span className="text-sm font-bold text-foreground tracking-tight block mt-0.5">
+                                        {activeViewerAttendee.flight_numbers || "Pending Flight"}
+                                      </span>
+                                    </div>
+
+                                    <div>
+                                      <span className="text-[10px] text-muted-foreground uppercase font-medium block">
+                                        Seat Assignment
+                                      </span>
+                                      <span className="text-xs font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 inline-block mt-0.5">
+                                        💺 {activeViewerAttendee.seat_assignment || "Assigned at Gate"}
+                                      </span>
+                                    </div>
+
+                                    <div>
+                                      <span className="text-[10px] text-muted-foreground uppercase font-medium block">
+                                        Booking Ref (PNR)
+                                      </span>
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <code className="text-xs font-bold font-mono text-foreground bg-muted px-1.5 py-0.5 rounded">
+                                          {activeViewerAttendee.booking_reference || "N/A"}
+                                        </code>
+                                        {activeViewerAttendee.booking_reference && (
+                                          <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={() =>
+                                              copyToClipboard(
+                                                activeViewerAttendee.booking_reference!,
+                                                `pnr-${activeViewerAttendee.id}`
+                                              )
+                                            }
+                                            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                                            title="Copy Booking Reference"
+                                          >
+                                            {copiedId === `pnr-${activeViewerAttendee.id}` ? (
+                                              <Check className="w-3.5 h-3.5 text-emerald-500" />
+                                            ) : (
+                                              <Copy className="w-3.5 h-3.5" />
+                                            )}
+                                          </Button>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Route & Dates Bar */}
+                                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs px-1 text-muted-foreground">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-foreground">
+                                        {activeViewerAttendee.origin_city || "Departure Airport"}
+                                      </span>
+                                      <ArrowRight className="w-3.5 h-3.5 text-sky-500" />
+                                      <span className="font-semibold text-foreground">
+                                        {activeViewerAttendee.destination_city || eventDetails.event.location}
+                                      </span>
+                                      {activeViewerAttendee.departure_date && (
+                                        <span className="text-[11px] bg-muted px-2 py-0.5 rounded">
+                                          📅 {activeViewerAttendee.departure_date}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handleOpenEditFlight(activeViewerAttendee)}
+                                        className="h-7 text-xs gap-1 border-sky-500/30 hover:bg-sky-500/10"
+                                      >
+                                        <Edit3 className="w-3 h-3 text-sky-500" />
+                                        <span>Update Plane / Seat</span>
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() =>
+                                          copyToClipboard(
+                                            `${activeViewerAttendee.attendee_name} • ${activeViewerAttendee.carrier_airline} ${activeViewerAttendee.flight_numbers} • Seat ${activeViewerAttendee.seat_assignment} • Ref: ${activeViewerAttendee.booking_reference} • Route: ${activeViewerAttendee.origin_city} ➔ ${activeViewerAttendee.destination_city}`,
+                                            `all-${activeViewerAttendee.id}`
+                                          )
+                                        }
+                                        className="h-7 text-xs gap-1"
+                                      >
+                                        {copiedId === `all-${activeViewerAttendee.id}` ? (
+                                          <Check className="w-3 h-3 text-emerald-500" />
+                                        ) : (
+                                          <Copy className="w-3 h-3" />
+                                        )}
+                                        <span>Share My Flight</span>
+                                      </Button>
+                                    </div>
+                                  </div>
+
+                                  {/* Same-Plane Co-Travelers Banner */}
+                                  <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs">
+                                    <div className="flex items-center gap-2 font-semibold text-emerald-700 dark:text-emerald-300">
+                                      <Users className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                      <span>
+                                        Traveling on this exact plane with you ({samePlaneCompanions.length}{" "}
+                                        {samePlaneCompanions.length === 1 ? "colleague" : "colleagues"}):
+                                      </span>
+                                    </div>
+                                    {samePlaneCompanions.length > 0 ? (
+                                      <div className="mt-2 flex flex-wrap gap-2">
+                                        {samePlaneCompanions.map((comp) => (
+                                          <div
+                                            key={comp.id}
+                                            className="inline-flex items-center gap-1.5 bg-background/90 px-2.5 py-1 rounded-md border border-emerald-500/30 text-[11px] shadow-xs"
+                                          >
+                                            <span className="font-bold text-foreground">
+                                              {comp.attendee_name}
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                              ({comp.role_in_event})
+                                            </span>
+                                            <span className="font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded">
+                                              Seat {comp.seat_assignment || "Assigned"}
+                                            </span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="mt-1 text-muted-foreground text-[11px]">
+                                        You are currently the only registered traveler on flight{" "}
+                                        <strong>{activeViewerAttendee.flight_numbers}</strong>. Other team members are rostered on parallel flights below.
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="mt-3 p-4 rounded-lg bg-amber-500/10 border border-amber-500/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                                  <div>
+                                    <span className="font-semibold text-amber-700 dark:text-amber-400 block">
+                                      No flight booked for {activeViewerAttendee.attendee_name} yet
+                                    </span>
+                                    <span className="text-muted-foreground text-[11px]">
+                                      Register your plane flight number, airline, and seat assignment to coordinate with other attendees.
+                                    </span>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    onClick={() => handleOpenEditFlight(activeViewerAttendee)}
+                                    className="gap-1.5 shrink-0 bg-primary text-primary-foreground"
+                                  >
+                                    <Plane className="w-3.5 h-3.5" />
+                                    <span>Register Flight Details</span>
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Co-Travelers' Plane Information Section */}
+                          <div className="space-y-3 pt-2">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div>
+                                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                                  <Users className="w-4 h-4 text-primary" />
+                                  <span>Co-Travelers' Plane Information</span>
+                                  <Badge variant="secondary" className="text-[10px]">
+                                    {filteredAttendees.length} Shown
+                                  </Badge>
+                                </h3>
+                                <p className="text-xs text-muted-foreground">
+                                  View flight schedules, airline carriers, seat assignments, and luggage for everyone on this trip.
+                                </p>
+                              </div>
+
+                              {/* Search & Filter Controls */}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <div className="relative">
+                                  <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                                  <Input
+                                    value={flightSearchTerm}
+                                    onChange={(e) => setFlightSearchTerm(e.target.value)}
+                                    placeholder="Filter by name, flight #, seat..."
+                                    className="h-8 pl-8 text-xs w-[180px] sm:w-[210px]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Filter Chips */}
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs pb-1">
+                              <button
+                                type="button"
+                                onClick={() => setFlightFilterAirline("all")}
+                                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
+                                  flightFilterAirline === "all"
+                                    ? "bg-primary text-primary-foreground"
+                                    : "bg-muted text-muted-foreground hover:text-foreground"
+                                }`}
                               >
-                                {attendee.attendance_status}
-                              </Badge>
-                              <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                                {attendee.role_in_event}
-                              </span>
-                            </div>
-                            <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
-                              <span>{attendee.attendee_email}</span>
-                              {attendee.flight_details && (
-                                <span className="inline-flex items-center gap-1 text-foreground/80">
-                                  <Plane className="w-3 h-3 text-sky-500" />
-                                  {attendee.flight_details}
-                                </span>
+                                All Flights ({allAttendees.length})
+                              </button>
+                              {samePlaneCompanions.length > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setFlightFilterAirline("same_plane")}
+                                  className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all flex items-center gap-1 ${
+                                    flightFilterAirline === "same_plane"
+                                      ? "bg-emerald-600 text-white"
+                                      : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20"
+                                  }`}
+                                >
+                                  <span>✈️ Same Plane As You</span>
+                                  <span className="font-bold">({samePlaneCompanions.length + 1})</span>
+                                </button>
                               )}
-                              {attendee.lodging_details && (
-                                <span className="inline-flex items-center gap-1 text-foreground/80">
-                                  <Hotel className="w-3 h-3 text-amber-500" />
-                                  {attendee.lodging_details}
-                                </span>
-                              )}
+                              {["Delta", "United", "Air Canada"].map((carrier) => {
+                                const count = allAttendees.filter((a) =>
+                                  a.carrier_airline?.toLowerCase().includes(carrier.toLowerCase())
+                                ).length;
+                                if (count === 0) return null;
+                                return (
+                                  <button
+                                    key={carrier}
+                                    type="button"
+                                    onClick={() => setFlightFilterAirline(carrier)}
+                                    className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${
+                                      flightFilterAirline.toLowerCase() === carrier.toLowerCase()
+                                        ? "bg-foreground text-background font-semibold"
+                                        : "bg-muted text-muted-foreground hover:text-foreground"
+                                    }`}
+                                  >
+                                    {carrier} ({count})
+                                  </button>
+                                );
+                              })}
                             </div>
-                            {attendee.special_luggage_assigned && (
-                              <div className="flex items-center gap-1.5 text-[11px] text-purple-600 dark:text-purple-400 font-medium pt-0.5">
-                                <Package className="w-3 h-3" />
-                                <span>Assigned Luggage: {attendee.special_luggage_assigned}</span>
+
+                            {/* Plane Cards Grid */}
+                            {filteredAttendees.length === 0 ? (
+                              <div className="p-8 text-center text-xs text-muted-foreground border border-dashed rounded-lg">
+                                No attendees match your flight search query.
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {filteredAttendees.map((attendee) => {
+                                  const isSameFlight =
+                                    activeViewerAttendee &&
+                                    attendee.id !== activeViewerAttendee.id &&
+                                    samePlaneCompanions.some((c) => c.id === attendee.id);
+                                  const isMe = attendee.id === activeViewerAttendee?.id;
+
+                                  return (
+                                    <div
+                                      key={attendee.id}
+                                      className={`rounded-xl p-3.5 border transition-all text-xs flex flex-col justify-between gap-3 ${
+                                        isMe
+                                          ? "bg-sky-500/5 border-sky-500/40 shadow-xs"
+                                          : isSameFlight
+                                          ? "bg-emerald-500/5 border-emerald-500/30"
+                                          : "bg-card border-border hover:border-border/80"
+                                      }`}
+                                    >
+                                      <div className="space-y-2">
+                                        {/* Top Row: Name, Status & Tags */}
+                                        <div className="flex items-start justify-between gap-2">
+                                          <div>
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                              <span className="font-bold text-sm text-foreground">
+                                                {attendee.attendee_name}
+                                              </span>
+                                              {isMe && (
+                                                <Badge className="bg-sky-500 text-white text-[10px] py-0 px-1.5">
+                                                  You
+                                                </Badge>
+                                              )}
+                                              {isSameFlight && (
+                                                <Badge className="bg-emerald-600 text-white text-[10px] py-0 px-1.5">
+                                                  ✈️ Same Plane
+                                                </Badge>
+                                              )}
+                                            </div>
+                                            <span className="text-[11px] text-muted-foreground block">
+                                              {attendee.role_in_event} • {attendee.attendee_email}
+                                            </span>
+                                          </div>
+
+                                          <Badge
+                                            variant="outline"
+                                            className={
+                                              attendee.attendance_status === "confirmed"
+                                                ? "bg-emerald-500/10 text-emerald-600 border-emerald-300 text-[10px]"
+                                                : "bg-amber-500/10 text-amber-600 border-amber-300 text-[10px]"
+                                            }
+                                          >
+                                            {attendee.attendance_status}
+                                          </Badge>
+                                        </div>
+
+                                        {/* Flight Information Block */}
+                                        {attendee.flight_numbers || attendee.carrier_airline ? (
+                                          <div className="p-2.5 rounded-lg bg-muted/40 border border-border/60 space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                              <div className="flex items-center gap-1.5">
+                                                <Badge
+                                                  variant="outline"
+                                                  className={`text-[10px] font-semibold ${getAirlineBadgeStyle(
+                                                    attendee.carrier_airline
+                                                  )}`}
+                                                >
+                                                  {attendee.carrier_airline || "Airline"}
+                                                </Badge>
+                                                <span className="font-bold text-foreground tracking-tight text-xs">
+                                                  {attendee.flight_numbers}
+                                                </span>
+                                              </div>
+                                              <span className="font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded text-[11px] border border-sky-500/20">
+                                                Seat {attendee.seat_assignment || "Unassigned"}
+                                              </span>
+                                            </div>
+
+                                            {/* Route & Booking Ref */}
+                                            <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground pt-0.5">
+                                              <div className="flex items-center gap-1 font-medium">
+                                                <span>{attendee.origin_city || "Origin"}</span>
+                                                <ArrowRight className="w-3 h-3 text-sky-500" />
+                                                <span>{attendee.destination_city || eventDetails.event.location}</span>
+                                              </div>
+                                              {attendee.booking_reference && (
+                                                <div className="flex items-center gap-1">
+                                                  <span className="text-[10px] text-muted-foreground">Ref:</span>
+                                                  <code className="font-mono font-semibold text-foreground bg-background px-1 py-0.2 rounded border">
+                                                    {attendee.booking_reference}
+                                                  </code>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <div className="p-2.5 rounded-lg border border-dashed text-center text-muted-foreground text-[11px]">
+                                            No flight registered yet. Click "Update Flight" to add reservation.
+                                          </div>
+                                        )}
+
+                                        {/* Lodging & Luggage Badges */}
+                                        <div className="flex flex-wrap items-center gap-2 pt-0.5 text-[11px]">
+                                          {attendee.lodging_details && (
+                                            <span className="inline-flex items-center gap-1 text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">
+                                              <Hotel className="w-3 h-3 text-amber-500" />
+                                              <span>{attendee.lodging_details}</span>
+                                            </span>
+                                          )}
+                                          {attendee.special_luggage_assigned && (
+                                            <span className="inline-flex items-center gap-1 text-purple-600 dark:text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/20 font-medium">
+                                              <Package className="w-3 h-3" />
+                                              <span>{attendee.special_luggage_assigned}</span>
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Card Footer Actions */}
+                                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-border/50 text-xs">
+                                        <div className="text-[11px] text-muted-foreground">
+                                          Stipend: <strong className="text-foreground">${(attendee.stipend_amount || 0).toFixed(2)}</strong>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          {attendee.flight_numbers && (
+                                            <Button
+                                              size="sm"
+                                              variant="ghost"
+                                              onClick={() =>
+                                                copyToClipboard(
+                                                  `${attendee.attendee_name} • ${attendee.carrier_airline || "Flight"} ${attendee.flight_numbers} • Seat ${attendee.seat_assignment || "TBD"} • Ref: ${attendee.booking_reference || "N/A"}`,
+                                                  `card-${attendee.id}`
+                                                )
+                                              }
+                                              className="h-7 px-2 text-[11px] gap-1 text-muted-foreground hover:text-foreground"
+                                              title="Copy Flight Summary"
+                                            >
+                                              {copiedId === `card-${attendee.id}` ? (
+                                                <Check className="w-3 h-3 text-emerald-500" />
+                                              ) : (
+                                                <Copy className="w-3 h-3" />
+                                              )}
+                                              <span>Copy Flight</span>
+                                            </Button>
+                                          )}
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleOpenEditFlight(attendee)}
+                                            className="h-7 px-2 text-[11px] gap-1"
+                                          >
+                                            <Edit3 className="w-3 h-3 text-primary" />
+                                            <span>Update Flight</span>
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
-
-                          <div className="flex items-center gap-3 self-end md:self-center">
-                            <div className="text-right">
-                              <span className="text-[11px] text-muted-foreground block">Per-Diem Stipend</span>
-                              <span className="font-semibold text-foreground">
-                                ${(attendee.stipend_amount || 0).toFixed(2)}
-                              </span>
+                        </>
+                      ) : (
+                        /* Traditional Attendee Roster Table View */
+                        <div className="divide-y divide-border">
+                          {allAttendees.length === 0 ? (
+                            <div className="p-8 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
+                              No team members added yet. Click "Add Traveler" to roster pilots and crew.
                             </div>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => removeAttendeeMutation.mutate(attendee.id)}
-                              className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
+                          ) : (
+                            allAttendees.map((attendee) => (
+                              <div
+                                key={attendee.id}
+                                className="py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs"
+                              >
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-foreground text-sm">
+                                      {attendee.attendee_name}
+                                    </span>
+                                    <Badge
+                                      variant="outline"
+                                      className={
+                                        attendee.attendance_status === "confirmed"
+                                          ? "bg-emerald-500/10 text-emerald-600 border-emerald-300 dark:border-emerald-800"
+                                          : "bg-amber-500/10 text-amber-600 border-amber-300 dark:border-amber-800"
+                                      }
+                                    >
+                                      {attendee.attendance_status}
+                                    </Badge>
+                                    <span className="px-2 py-0.5 rounded text-[11px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                      {attendee.role_in_event}
+                                    </span>
+                                  </div>
+                                  <div className="text-muted-foreground flex flex-wrap items-center gap-x-3 gap-y-1">
+                                    <span>{attendee.attendee_email}</span>
+                                    {attendee.flight_numbers && (
+                                      <span className="inline-flex items-center gap-1 text-foreground/80 font-medium">
+                                        <Plane className="w-3 h-3 text-sky-500" />
+                                        <span>
+                                          {attendee.carrier_airline} {attendee.flight_numbers} (Seat {attendee.seat_assignment || "TBD"})
+                                        </span>
+                                      </span>
+                                    )}
+                                    {attendee.lodging_details && (
+                                      <span className="inline-flex items-center gap-1 text-foreground/80">
+                                        <Hotel className="w-3 h-3 text-amber-500" />
+                                        {attendee.lodging_details}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {attendee.special_luggage_assigned && (
+                                    <div className="flex items-center gap-1.5 text-[11px] text-purple-600 dark:text-purple-400 font-medium pt-0.5">
+                                      <Package className="w-3 h-3" />
+                                      <span>Assigned Luggage: {attendee.special_luggage_assigned}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center gap-3 self-end md:self-center">
+                                  <div className="text-right">
+                                    <span className="text-[11px] text-muted-foreground block">Per-Diem Stipend</span>
+                                    <span className="font-semibold text-foreground">
+                                      ${(attendee.stipend_amount || 0).toFixed(2)}
+                                    </span>
+                                  </div>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handleOpenEditFlight(attendee)}
+                                    className="h-8 text-xs gap-1"
+                                  >
+                                    <Edit3 className="w-3 h-3 text-primary" />
+                                    <span>Edit Flight</span>
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => removeAttendeeMutation.mutate(attendee.id)}
+                                    className="text-muted-foreground hover:text-destructive h-8 w-8 p-0"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
               {/* Trip Ground Transport & Departure Boarding Section */}
               <Card className="border-border shadow-xs">
@@ -1575,6 +2262,140 @@ export default function TravelEventsPage() {
                   <span>
                     {broadcastDepartureMutation.isPending ? "Broadcasting..." : "Send Departure Alert"}
                   </span>
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Update Flight & Plane Details Modal */}
+      <Dialog open={isEditFlightModalOpen} onOpenChange={setIsEditFlightModalOpen}>
+        <DialogContent className="sm:max-w-[520px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Plane className="w-5 h-5 text-sky-500" />
+              <span>Update Plane Flight & Reservation</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Update airline, flight numbers, seat assignment, and booking confirmation for{" "}
+              <strong className="text-foreground">{editingAttendee?.attendee_name}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingAttendee && (
+            <form onSubmit={handleSubmitEditFlight} className="space-y-4 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Airline Carrier</Label>
+                  <select
+                    value={editCarrierAirline}
+                    onChange={(e) => setEditCarrierAirline(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-xs shadow-xs focus:ring-1 focus:ring-sky-500"
+                  >
+                    <option value="Air Canada">🍁 Air Canada</option>
+                    <option value="Delta Air Lines">🔺 Delta Air Lines</option>
+                    <option value="United Airlines">🌐 United Airlines</option>
+                    <option value="American Airlines">🦅 American Airlines</option>
+                    <option value="Southwest Airlines">💛 Southwest Airlines</option>
+                    <option value="WestJet">✈️ WestJet</option>
+                    <option value="Alaska Airlines">🏔️ Alaska Airlines</option>
+                    <option value="British Airways">🇬🇧 British Airways</option>
+                    <option value="Lufthansa">🇩🇪 Lufthansa</option>
+                    <option value="Charter / Private Flight">🛩️ Charter / Private Flight</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Flight Number & Plane</Label>
+                  <Input
+                    required
+                    value={editFlightNumbers}
+                    onChange={(e) => setEditFlightNumbers(e.target.value)}
+                    placeholder="e.g. DL 1420 or AC 185"
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Seat Assignment</Label>
+                  <Input
+                    value={editSeatAssignment}
+                    onChange={(e) => setEditSeatAssignment(e.target.value)}
+                    placeholder="e.g. 14A (Window) or 2B"
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Booking Reference (PNR)</Label>
+                  <Input
+                    value={editBookingRef}
+                    onChange={(e) => setEditBookingRef(e.target.value)}
+                    placeholder="e.g. DL-881022 or 6-character PNR"
+                    className="text-xs font-mono font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Departure / Origin Airport</Label>
+                  <Input
+                    value={editOriginCity}
+                    onChange={(e) => setEditOriginCity(e.target.value)}
+                    placeholder="e.g. New York (JFK) or Toronto (YYZ)"
+                    className="text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Arrival / Destination Airport</Label>
+                  <Input
+                    value={editDestinationCity}
+                    onChange={(e) => setEditDestinationCity(e.target.value)}
+                    placeholder="e.g. Las Vegas (LAS) or Montreal (YUL)"
+                    className="text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Hotel / Lodging Details</Label>
+                <Input
+                  value={editLodging}
+                  onChange={(e) => setEditLodging(e.target.value)}
+                  placeholder="e.g. Hilton Grand Vacations - Room 402"
+                  className="text-xs"
+                />
+              </div>
+
+              <div className="p-2.5 rounded bg-sky-500/10 border border-sky-500/20 text-[11px] text-sky-700 dark:text-sky-300 flex items-start gap-2">
+                <Plane className="h-4 w-4 shrink-0 mt-0.5 text-sky-500" />
+                <span>
+                  Updating this reservation will immediately update the <strong>Trip Flight Manifest</strong>, allowing
+                  you and your co-travelers on this flight to see each other's plane information.
+                </span>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsEditFlightModalOpen(false)}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={updateFlightMutation.isPending}
+                  className="text-xs gap-1.5 font-semibold bg-primary text-primary-foreground"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  <span>{updateFlightMutation.isPending ? "Saving Plane Info..." : "Save Flight Details"}</span>
                 </Button>
               </DialogFooter>
             </form>

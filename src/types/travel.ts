@@ -11,6 +11,18 @@ export interface EventAttendee {
   stipend_amount: number;
   special_luggage_assigned?: string | null;
   notes?: string | null;
+  // Enriched plane / flight booking information
+  booking_reference?: string | null;
+  carrier_airline?: string | null;
+  flight_numbers?: string | null;
+  seat_assignment?: string | null;
+  origin_city?: string | null;
+  destination_city?: string | null;
+  departure_date?: string | null;
+  return_date?: string | null;
+  booking_status?: string | null;
+  booking_requires_drone_luggage?: boolean;
+  booking_pelican_case_tag?: string | null;
   created_at: string;
   updated_at: string;
 }

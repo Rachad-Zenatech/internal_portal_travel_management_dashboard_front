@@ -37,6 +37,23 @@ export const travelService = {
     apiClient.post<EventAttendee>(`/api/travel/events/${eventId}/attendees`, data),
   removeAttendee: (attendeeId: string) =>
     apiClient.delete(`/api/travel/attendees/${attendeeId}`),
+  updateAttendeeFlight: (
+    attendeeId: string,
+    data: {
+      carrier_airline?: string;
+      flight_numbers?: string;
+      seat_assignment?: string;
+      booking_reference?: string;
+      origin_city?: string;
+      destination_city?: string;
+      flight_details?: string;
+      lodging_details?: string;
+    }
+  ) =>
+    apiClient.put<{ message: string; attendee_id: string }>(
+      `/api/travel/attendees/${attendeeId}/flight`,
+      data
+    ),
 
   // Budgets ("Budgeting")
   getBudgets: () => apiClient.get<TravelBudget[]>("/api/travel/budgets"),
