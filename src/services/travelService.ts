@@ -134,8 +134,10 @@ export const travelService = {
     apiClient.get<import("@/types/travel").RealtimeBudgetForecast>("/api/travel/budgets/realtime-forecast"),
 
   // Ground Transport & Vehicle Library with Seating Capacity
-  getVehicles: () =>
-    apiClient.get<import("@/types/travel").TravelVehicle[]>("/api/travel/vehicles"),
+  getVehicles: (eventId?: string) =>
+    apiClient.get<import("@/types/travel").TravelVehicle[]>(
+      eventId ? `/api/travel/vehicles?event_id=${eventId}` : "/api/travel/vehicles"
+    ),
   createVehicle: (payload: Partial<import("@/types/travel").TravelVehicle>) =>
     apiClient.post<import("@/types/travel").TravelVehicle>("/api/travel/vehicles", payload),
   lookupVehicleSpecs: (params: { make: string; model?: string; year?: number; vin?: string }) => {

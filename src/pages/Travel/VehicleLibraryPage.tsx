@@ -13,6 +13,8 @@ import {
   Package,
   Sparkles,
   ShieldCheck,
+  MapPin,
+  Filter,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,7 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const ROSTER_TRAVELERS = [
+const EXECUTIVE_TRAVELERS = [
   "Michael Vance (CEO)",
   "Vanessa (Executive Assistant)",
   "Sajjad (VP Engineering)",
@@ -37,21 +39,25 @@ const ROSTER_TRAVELERS = [
   "Phil (VP Flight Testing)",
   "Linda (VP Partnerships)",
   "Marcus Vance (Ops Chauffeur)",
-  "Alex Rivera (Lead Drone Pilot)",
-  "Elena Rostova (Avionics Engineer)",
-  "David Kim (Telemetry Specialist)",
-  "Samir Patel (Battery Tech)",
-  "Chloe Dupont (Field Support)",
-  "Sarah Jenkins (Regulatory Legal)",
 ];
 
 export default function VehicleLibraryPage() {
   const queryClient = useQueryClient();
 
-  // Queries
+  // Trip / Event Filter State
+  const [selectedTripFilter, setSelectedTripFilter] = useState<string>("all");
+
+  // Query Events / Trips
+  const { data: eventsList = [] } = useQuery({
+    queryKey: ["travelEvents"],
+    queryFn: travelService.getEvents,
+  });
+
+  // Query Vehicles (filtered by trip if selected)
   const { data: vehicles = [], isLoading } = useQuery({
-    queryKey: ["travelVehicles"],
-    queryFn: travelService.getVehicles,
+    queryKey: ["travelVehicles", selectedTripFilter],
+    queryFn: () =>
+      travelService.getVehicles(selectedTripFilter !== "all" ? selectedTripFilter : undefined),
   });
 
   // Free Spec Lookup State
@@ -64,8 +70,31 @@ export default function VehicleLibraryPage() {
   // Seat Assignment Dialog State
   const [selectedVehicle, setSelectedVehicle] = useState<TravelVehicle | null>(null);
   const [selectedSeat, setSelectedSeat] = useState<{ row: number; seat: VehicleSeat } | null>(null);
-  const [assigneeName, setAssigneeName] = useState(ROSTER_TRAVELERS[0]);
+  const [assigneeName, setAssigneeName] = useState<string>("");
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+
+  // Fetch attendees for the specific trip of the selected vehicle
+  const { data: selectedVehicleEvent } = useQuery({
+    queryKey: ["travelEventDetails", selectedVehicle?.assigned_event_id],
+    queryFn: () =>
+      selectedVehicle?.assigned_event_id
+        ? travelService.getEvent(selectedVehicle.assigned_event_id)
+        : Promise.resolve(null),
+    enabled: !!selectedVehicle?.assigned_event_id,
+  });
+
+  // Compute available travelers for this specific vehicle/trip
+  const tripAttendees = (selectedVehicleEvent?.attendees || []).map(
+    (a) => `${a.attendee_name} (${a.role_in_event || "Traveler"} - ${a.attendance_status})`
+  );
+
+  const availableAssignees = [
+    ...tripAttendees,
+    ...EXECUTIVE_TRAVELERS.filter((exec) => !tripAttendees.some((att) => att.includes(exec.split(" ")[0]))),
+    "Pelican Drone Case #1 (Sensors)",
+    "Pelican LiPo Battery Case (Hazmat/Dry)",
+    "Available (Vacant Seat)",
+  ];
 
   // Add Vehicle Dialog State
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
@@ -78,6 +107,7 @@ export default function VehicleLibraryPage() {
     vehicle_class: "Full-Size Extended SUV",
     seating_capacity: 8,
     cargo_cases_capacity: 6,
+    assigned_event_id: eventsList[0]?.id || "",
     assigned_driver: "Pat (Operations)",
     daily_rate_usd: 210,
     total_cost_usd: 1050,
@@ -166,6 +196,7 @@ export default function VehicleLibraryPage() {
       vehicle_class: lookupResult.vehicle_class,
       seating_capacity: lookupResult.amount_of_seats,
       cargo_cases_capacity: lookupResult.cargo_pelican_capacity,
+      assigned_event_id: (selectedTripFilter !== "all" ? selectedTripFilter : eventsList[0]?.id) || null,
       assigned_driver: "Unassigned Driver",
       seat_layout: lookupResult.default_seat_layout,
       daily_rate_usd: 195,
@@ -208,12 +239,12 @@ export default function VehicleLibraryPage() {
             <h1 className="text-3xl font-bold tracking-tight">Ground Vehicle & Fleet Library</h1>
             <Badge variant="outline" className="border-emerald-500/40 text-emerald-400 bg-emerald-500/10">
               <Sparkles className="h-3 w-3 mr-1" />
-              Free NHTSA & Spec Engine
+              Dynamic Free NHTSA Spec Engine
             </Badge>
           </div>
           <p className="text-muted-foreground mt-1">
-            Automated seating capacity discovery, interactive row seat maps, and traveler allocation for weekly 20–30
-            person flights & drone teams.
+            Trip-based vehicle fleet management, seating capacity discovery, and seat assignments linked directly to
+            each travel expedition.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -232,11 +263,40 @@ export default function VehicleLibraryPage() {
         </div>
       </div>
 
+      {/* Trip / Event Selector Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-border/80 bg-card/60 backdrop-blur shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+            <Filter className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="text-sm font-semibold">Active Trip / Event Selection</div>
+            <div className="text-xs text-muted-foreground">
+              Filter vehicle fleet and seat assignments based on which trip the travelers are on
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <select
+            value={selectedTripFilter}
+            onChange={(e) => setSelectedTripFilter(e.target.value)}
+            className="w-full sm:w-96 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium shadow-xs focus:outline-none focus:ring-2 focus:ring-primary"
+          >
+            <option value="all">🌐 All Trips & Events (Entire Corporate Fleet)</option>
+            {eventsList.map((evt) => (
+              <option key={evt.id} value={evt.id}>
+                📍 {evt.title} ({evt.location} • {evt.start_date})
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
       {/* KPI Overview Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="bg-card/50 backdrop-blur border-border/60">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Active Fleet Units</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Fleet Units for Selected Trip</CardTitle>
             <Car className="h-4 w-4 text-primary" />
           </CardHeader>
           <CardContent>
@@ -247,13 +307,13 @@ export default function VehicleLibraryPage() {
 
         <Card className="bg-card/50 backdrop-blur border-border/60">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Seating Capacity</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Trip Seating Capacity</CardTitle>
             <Users className="h-4 w-4 text-emerald-400" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-emerald-400">{totalFleetSeats} Total Seats</div>
             <p className="text-xs text-muted-foreground mt-1">
-              Supports 20–30 weekly traveling staff seamlessly
+              Supports traveling roster and flight crew rotations
             </p>
           </CardContent>
         </Card>
@@ -269,7 +329,7 @@ export default function VehicleLibraryPage() {
               <span className="text-xs text-muted-foreground font-normal ml-2">/ {totalAvailableSeats} Free</span>
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {Math.round((totalOccupiedSeats / (totalFleetSeats || 1)) * 100)}% Fleet seat occupancy
+              {Math.round((totalOccupiedSeats / (totalFleetSeats || 1)) * 100)}% Seat occupancy
             </p>
           </CardContent>
         </Card>
@@ -292,28 +352,28 @@ export default function VehicleLibraryPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
-              <CardTitle className="text-lg">Free Vehicle Library & Seat Capacity Lookup</CardTitle>
+              <CardTitle className="text-lg">Dynamic Free Vehicle Library & Seat Capacity Lookup</CardTitle>
             </div>
             <Badge variant="secondary" className="text-xs w-fit">
-              100% Free Public Library (U.S. NHTSA Gov API + Local Catalog)
+              100% Free Public Library (U.S. NHTSA Public API)
             </Badge>
           </div>
           <CardDescription>
-            Search vehicle makes, models, or 17-digit VINs to instantly retrieve seating amount, row configurations,
-            and trunk Pelican case dimensions without paid API tokens.
+            Search any vehicle make, model, or 17-digit VIN to dynamically retrieve official seating capacity,
+            row configuration, and trunk dimensions without paid tokens.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Quick Preset Buttons */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Common Corporate Presets:</span>
+            <span className="text-xs font-medium text-muted-foreground">Quick Model Lookups:</span>
             <Button
               variant="outline"
               size="sm"
               className="h-7 text-xs"
               onClick={() => handlePresetSelect("Cadillac", "Escalade ESV")}
             >
-              Escalade (7 Seats)
+              Escalade
             </Button>
             <Button
               variant="outline"
@@ -321,7 +381,39 @@ export default function VehicleLibraryPage() {
               className="h-7 text-xs"
               onClick={() => handlePresetSelect("Chevrolet", "Suburban")}
             >
-              Suburban (8 Seats)
+              Suburban
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => handlePresetSelect("Honda", "Odyssey")}
+            >
+              Honda Odyssey
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => handlePresetSelect("Toyota", "Sienna")}
+            >
+              Toyota Sienna
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => handlePresetSelect("BMW", "X7")}
+            >
+              BMW X7
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => handlePresetSelect("Ford", "Transit 350")}
+            >
+              Transit 350 (15 Pax)
             </Button>
             <Button
               variant="outline"
@@ -329,23 +421,7 @@ export default function VehicleLibraryPage() {
               className="h-7 text-xs"
               onClick={() => handlePresetSelect("Mercedes-Benz", "Sprinter")}
             >
-              Sprinter (12 Seats)
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => handlePresetSelect("Ford", "Transit Passenger")}
-            >
-              Transit Wagon (15 Seats)
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => handlePresetSelect("Tesla", "Model X")}
-            >
-              Tesla Model X (6 Seats)
+              Sprinter (12 Pax)
             </Button>
           </div>
 
@@ -354,7 +430,7 @@ export default function VehicleLibraryPage() {
             <div>
               <Label className="text-xs">Vehicle Make</Label>
               <Input
-                placeholder="e.g. Cadillac, Ford, Chevrolet"
+                placeholder="e.g. Cadillac, Ford, Toyota"
                 value={lookupMake}
                 onChange={(e) => setLookupMake(e.target.value)}
                 className="mt-1 bg-background"
@@ -363,7 +439,7 @@ export default function VehicleLibraryPage() {
             <div>
               <Label className="text-xs">Model</Label>
               <Input
-                placeholder="e.g. Escalade, Transit, Suburban"
+                placeholder="e.g. Escalade, Transit, Suburban, Odyssey"
                 value={lookupModel}
                 onChange={(e) => setLookupModel(e.target.value)}
                 className="mt-1 bg-background"
@@ -384,7 +460,7 @@ export default function VehicleLibraryPage() {
                 onClick={() => handleFreeSpecLookup()}
                 disabled={isLookingUp || (!lookupMake && !lookupVin)}
               >
-                {isLookingUp ? "Querying Free Spec API..." : "Calculate Seating Capacity"}
+                {isLookingUp ? "Querying Free NHTSA API..." : "Calculate Seating Capacity"}
               </Button>
             </div>
           </div>
@@ -412,7 +488,7 @@ export default function VehicleLibraryPage() {
                   </Badge>
                   <Button size="sm" onClick={handleAddLookupResultToFleet} disabled={createVehicleMutation.isPending}>
                     <Plus className="h-3.5 w-3.5 mr-1" />
-                    Deploy to Fleet
+                    Deploy to Trip Fleet
                   </Button>
                 </div>
               </div>
@@ -442,9 +518,9 @@ export default function VehicleLibraryPage() {
 
       {/* Fleet Vehicles List with Visual Seat Maps */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold tracking-tight">Active Ground Vehicles & Seating Maps</h2>
-          <div className="text-xs text-muted-foreground flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h2 className="text-xl font-semibold tracking-tight">Active Vehicles & Visual Seat Maps</h2>
+          <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-amber-400"></span> Driver
             </span>
@@ -452,7 +528,7 @@ export default function VehicleLibraryPage() {
               <span className="h-2 w-2 rounded-full bg-purple-400"></span> VIP Executive
             </span>
             <span className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-blue-400"></span> Flight Crew
+              <span className="h-2 w-2 rounded-full bg-blue-400"></span> Trip Attendee
             </span>
             <span className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-rose-400"></span> Drone Cargo
@@ -467,7 +543,7 @@ export default function VehicleLibraryPage() {
           <div className="p-8 text-center text-muted-foreground">Loading vehicle fleet and seating matrices...</div>
         ) : vehicles.length === 0 ? (
           <Card className="p-8 text-center text-muted-foreground">
-            No vehicles currently registered in the fleet. Click "Add Vehicle" or use the Free Spec Lookup above to add
+            No vehicles currently registered for this trip. Click "Add Vehicle" or use the Free Spec Lookup above to add
             one.
           </Card>
         ) : (
@@ -512,6 +588,17 @@ export default function VehicleLibraryPage() {
                       </div>
                     </div>
 
+                    {/* Prominent Trip Link Badge */}
+                    <div className="mt-3 flex items-center gap-2 text-xs font-medium text-primary bg-primary/10 px-2.5 py-1.5 rounded-md border border-primary/20">
+                      <MapPin className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">
+                        <strong>Assigned Trip:</strong> {v.event_title || "General Expedition / Master Fleet"}
+                      </span>
+                      {v.event_location && (
+                        <span className="text-muted-foreground shrink-0">• {v.event_location}</span>
+                      )}
+                    </div>
+
                     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-2">
                       <span>
                         <strong>Driver:</strong> {v.assigned_driver}
@@ -552,6 +639,7 @@ export default function VehicleLibraryPage() {
                                     onClick={() => {
                                       setSelectedVehicle(v);
                                       setSelectedSeat({ row: row.row, seat });
+                                      setAssigneeName("");
                                       setIsAssignModalOpen(true);
                                     }}
                                     className={`px-2 py-1 rounded text-xs border font-medium transition-all text-left flex items-center gap-1.5 ${getSeatBadgeColor(
@@ -574,10 +662,10 @@ export default function VehicleLibraryPage() {
                       )}
                     </div>
 
-                    {/* Passenger Roster List */}
+                    {/* Passenger Manifest List */}
                     {v.current_passengers && v.current_passengers.length > 0 && (
                       <div className="text-xs">
-                        <span className="text-muted-foreground font-medium">Manifest: </span>
+                        <span className="text-muted-foreground font-medium">Assigned Manifest: </span>
                         <span className="text-foreground">{v.current_passengers.join(", ")}</span>
                       </div>
                     )}
@@ -595,7 +683,9 @@ export default function VehicleLibraryPage() {
           <DialogHeader>
             <DialogTitle>Seat Assignment: {selectedSeat?.seat.position}</DialogTitle>
             <DialogDescription>
-              Assign a traveling team member from the weekly roster or mark this seat for special drone cargo.
+              Assign a confirmed traveler going on{" "}
+              <strong>{selectedVehicle?.event_title || "this expedition"}</strong> or designate the seat for drone
+              hardware.
             </DialogDescription>
           </DialogHeader>
 
@@ -607,28 +697,41 @@ export default function VehicleLibraryPage() {
                   {selectedVehicle?.model})
                 </div>
                 <div>
-                  <strong>Current Occupant:</strong> {selectedSeat.seat.occupant}
+                  <strong>Assigned Trip:</strong> {selectedVehicle?.event_title || "General Expedition"}
                 </div>
                 <div>
-                  <strong>Seat Type:</strong> {selectedSeat.seat.type.toUpperCase()}
+                  <strong>Current Occupant:</strong> {selectedSeat.seat.occupant}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Select Traveler from Weekly 20–30 Roster</Label>
+                <Label>Select Traveler on this Trip Roster</Label>
                 <select
-                  value={assigneeName}
+                  value={assigneeName || availableAssignees[0]}
                   onChange={(e) => setAssigneeName(e.target.value)}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
-                  {ROSTER_TRAVELERS.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                  <option value="Pelican Drone Case #1 (Sensors)">Pelican Drone Case #1 (Sensors)</option>
-                  <option value="Pelican LiPo Battery Case (Hazmat/Dry)">Pelican LiPo Battery Case (Hazmat/Dry)</option>
-                  <option value="Available (Vacant Seat)">Available (Vacant Seat)</option>
+                  {tripAttendees.length > 0 && (
+                    <optgroup label={`Trip Attendees (${selectedVehicle?.event_title || "Active Trip"})`}>
+                      {tripAttendees.map((att) => (
+                        <option key={att} value={att.split(" (")[0]}>
+                          {att}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )}
+                  <optgroup label="Executive & Corporate Travelers">
+                    {EXECUTIVE_TRAVELERS.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Dedicated Drone Gear Space">
+                    <option value="Pelican Drone Case #1 (Sensors)">Pelican Drone Case #1 (Sensors)</option>
+                    <option value="Pelican LiPo Battery Case (Hazmat/Dry)">Pelican LiPo Battery Case (Hazmat/Dry)</option>
+                    <option value="Available (Vacant Seat)">Available (Vacant Seat)</option>
+                  </optgroup>
                 </select>
               </div>
             </div>
@@ -657,18 +760,19 @@ export default function VehicleLibraryPage() {
             <Button
               onClick={() => {
                 if (!selectedVehicle || !selectedSeat) return;
+                const chosen = assigneeName || availableAssignees[0].split(" (")[0];
                 assignSeatMutation.mutate({
                   vehicleId: selectedVehicle.id,
                   rowNumber: selectedSeat.row,
                   seatPosition: selectedSeat.seat.position,
-                  passengerName: assigneeName,
+                  passengerName: chosen,
                   action: "assign",
                 });
               }}
               disabled={assignSeatMutation.isPending}
             >
               <UserCheck className="h-4 w-4 mr-1" />
-              Assign Seat
+              Assign to Seat
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -680,11 +784,25 @@ export default function VehicleLibraryPage() {
           <DialogHeader>
             <DialogTitle>Add Vehicle to Ground Fleet</DialogTitle>
             <DialogDescription>
-              Register a new SUV, executive van, or passenger shuttle with verified seating capacity.
+              Register a new SUV, executive van, or passenger shuttle linked to a specific travel trip.
             </DialogDescription>
           </DialogHeader>
 
           <div className="grid grid-cols-2 gap-3 py-2 text-sm">
+            <div className="col-span-2">
+              <Label className="text-xs">Assign to Trip / Event</Label>
+              <select
+                value={newVehicle.assigned_event_id}
+                onChange={(e) => setNewVehicle({ ...newVehicle, assigned_event_id: e.target.value })}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
+              >
+                {eventsList.map((evt) => (
+                  <option key={evt.id} value={evt.id}>
+                    {evt.title} ({evt.location})
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="col-span-2">
               <Label className="text-xs">Vehicle Display Name</Label>
               <Input
