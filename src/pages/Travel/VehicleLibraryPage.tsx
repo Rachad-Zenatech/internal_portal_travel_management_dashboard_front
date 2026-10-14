@@ -1488,32 +1488,34 @@ export default function VehicleLibraryPage() {
 
       {/* Add Vehicle Modal */}
       <Dialog open={isAddVehicleOpen} onOpenChange={setIsAddVehicleOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Car className="h-5 w-5 text-primary" />
+        <DialogContent className="w-full sm:max-w-2xl md:max-w-3xl max-h-[92vh] overflow-y-auto p-6 sm:p-8">
+          <DialogHeader className="space-y-1">
+            <DialogTitle className="flex items-center gap-2.5 text-xl font-bold tracking-tight">
+              <div className="p-2 rounded-lg bg-primary/10 text-primary">
+                <Car className="h-5 w-5" />
+              </div>
               <span>Add Vehicle to Ground Fleet</span>
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-sm text-muted-foreground">
               Register a new SUV, executive van, or passenger shuttle linked to a specific travel trip.
             </DialogDescription>
           </DialogHeader>
 
           {/* Quick Library Auto-Complete Preset Bar */}
-          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-1.5 mt-1">
+          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2.5 mt-1 shadow-xs">
             <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold text-primary flex items-center gap-1.5">
-                <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
+              <Label className="text-sm font-semibold text-primary flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-primary animate-pulse" />
                 ⚡ Auto-Complete from Vehicle Spec Library
               </Label>
-              <Badge variant="outline" className="text-[10px] bg-primary/10 border-primary/30 text-primary">
+              <Badge variant="outline" className="text-xs font-semibold bg-primary/10 border-primary/30 text-primary px-2.5 py-0.5">
                 1-Click Presets
               </Badge>
             </div>
             <select
               value={selectedPresetIndex}
               onChange={(e) => handleSelectPreset(e.target.value)}
-              className="w-full rounded-md border border-primary/30 bg-background px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-primary shadow-xs"
+              className="w-full rounded-lg border border-primary/30 bg-background px-3.5 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary shadow-xs"
             >
               <option value="">-- Choose a vehicle preset from library to auto-fill --</option>
               {Object.entries(
@@ -1526,27 +1528,27 @@ export default function VehicleLibraryPage() {
                 <optgroup key={category} label={category}>
                   {items.map(({ preset, index }) => (
                     <option key={preset.name} value={String(index)}>
-                      {preset.make} {preset.model} ({preset.seating_capacity} Seats, {preset.cargo_cases_capacity} Cases - ${preset.daily_rate_usd}/day)
+                      {preset.make} {preset.model} ({preset.seating_capacity} Seats • {preset.cargo_cases_capacity} Cases • ${preset.daily_rate_usd}/day)
                     </option>
                   ))}
                 </optgroup>
               ))}
             </select>
             {autoDetectNotice && (
-              <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1.5 pt-1">
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+              <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-2 pt-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md p-2.5">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
                 <span>{autoDetectNotice}</span>
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3 py-2 text-sm">
-            <div className="col-span-2">
-              <Label className="text-xs">Assign to Trip / Event</Label>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2 text-sm">
+            <div className="col-span-1 sm:col-span-2">
+              <Label className="text-xs font-medium">Assign to Trip / Event</Label>
               <select
                 value={newVehicle.assigned_event_id}
                 onChange={(e) => setNewVehicle({ ...newVehicle, assigned_event_id: e.target.value })}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm mt-1 h-10"
               >
                 {eventsList.map((evt) => (
                   <option key={evt.id} value={evt.id}>
@@ -1555,21 +1557,22 @@ export default function VehicleLibraryPage() {
                 ))}
               </select>
             </div>
-            <div className="col-span-2">
-              <Label className="text-xs">Vehicle Display Name</Label>
+            <div className="col-span-1 sm:col-span-2">
+              <Label className="text-xs font-medium">Vehicle Display Name</Label>
               <Input
                 value={newVehicle.vehicle_name}
                 onChange={(e) => setNewVehicle({ ...newVehicle, vehicle_name: e.target.value })}
-                className="mt-1"
+                className="mt-1 h-10"
+                placeholder="e.g. Executive Suburban 1"
               />
             </div>
             <div>
-              <Label className="text-xs">Make</Label>
+              <Label className="text-xs font-medium">Make</Label>
               <Input
                 list="preset-makes-list"
                 value={newVehicle.make}
                 onChange={(e) => setNewVehicle({ ...newVehicle, make: e.target.value })}
-                className="mt-1"
+                className="mt-1 h-10"
                 placeholder="e.g. Chevrolet"
               />
               <datalist id="preset-makes-list">
@@ -1580,23 +1583,23 @@ export default function VehicleLibraryPage() {
             </div>
             <div>
               <div className="flex items-center justify-between">
-                <Label className="text-xs">Model</Label>
+                <Label className="text-xs font-medium">Model</Label>
                 <button
                   type="button"
                   onClick={() => handleAutoDetectSpecs()}
                   disabled={isAutoDetectingSpecs}
-                  className="text-[11px] text-primary hover:underline flex items-center gap-1 font-medium disabled:opacity-50"
+                  className="text-xs text-primary hover:underline flex items-center gap-1 font-semibold disabled:opacity-50"
                   title="Query Vehicle Spec Library for Seating & Pelican Capacity"
                 >
-                  <Sparkles className="h-3 w-3" />
-                  {isAutoDetectingSpecs ? "Detecting..." : "Auto-Detect"}
+                  <Sparkles className="h-3.5 w-3.5" />
+                  {isAutoDetectingSpecs ? "Detecting..." : "Auto-Detect Specs"}
                 </button>
               </div>
               <Input
                 list="preset-models-list"
                 value={newVehicle.model}
                 onChange={(e) => setNewVehicle({ ...newVehicle, model: e.target.value })}
-                className="mt-1"
+                className="mt-1 h-10"
                 placeholder="e.g. Suburban High Country"
               />
               <datalist id="preset-models-list">
@@ -1606,45 +1609,47 @@ export default function VehicleLibraryPage() {
               </datalist>
             </div>
             <div>
-              <Label className="text-xs">Seating Capacity (Amount of Seats)</Label>
+              <Label className="text-xs font-medium">Seating Capacity (Amount of Seats)</Label>
               <Input
                 type="number"
                 min={2}
                 max={20}
                 value={newVehicle.seating_capacity}
                 onChange={(e) => setNewVehicle({ ...newVehicle, seating_capacity: parseInt(e.target.value) || 7 })}
-                className="mt-1"
+                className="mt-1 h-10"
               />
             </div>
             <div>
-              <Label className="text-xs">Cargo Cases Capacity</Label>
+              <Label className="text-xs font-medium">Cargo Cases Capacity</Label>
               <Input
                 type="number"
                 min={0}
                 max={15}
                 value={newVehicle.cargo_cases_capacity}
                 onChange={(e) => setNewVehicle({ ...newVehicle, cargo_cases_capacity: parseInt(e.target.value) || 4 })}
-                className="mt-1"
+                className="mt-1 h-10"
               />
             </div>
             <div>
-              <Label className="text-xs">Rental Agency</Label>
+              <Label className="text-xs font-medium">Rental Agency</Label>
               <Input
                 value={newVehicle.rental_agency}
                 onChange={(e) => setNewVehicle({ ...newVehicle, rental_agency: e.target.value })}
-                className="mt-1"
+                className="mt-1 h-10"
+                placeholder="e.g. National Emerald Club"
               />
             </div>
             <div>
-              <Label className="text-xs">Assigned Driver / Lead</Label>
+              <Label className="text-xs font-medium">Assigned Driver / Lead</Label>
               <Input
                 value={newVehicle.assigned_driver}
                 onChange={(e) => setNewVehicle({ ...newVehicle, assigned_driver: e.target.value })}
-                className="mt-1"
+                className="mt-1 h-10"
+                placeholder="e.g. Pat (Operations)"
               />
             </div>
             <div>
-              <Label className="text-xs">Daily Rate ($ USD)</Label>
+              <Label className="text-xs font-medium">Daily Rate ($ USD)</Label>
               <Input
                 type="number"
                 value={newVehicle.daily_rate_usd}
@@ -1652,25 +1657,26 @@ export default function VehicleLibraryPage() {
                   const rate = parseFloat(e.target.value) || 0;
                   setNewVehicle({ ...newVehicle, daily_rate_usd: rate, total_cost_usd: rate * 5 });
                 }}
-                className="mt-1"
+                className="mt-1 h-10"
               />
             </div>
             <div>
-              <Label className="text-xs">Total Est. Cost ($ USD)</Label>
+              <Label className="text-xs font-medium">Total Est. Cost ($ USD)</Label>
               <Input
                 type="number"
                 value={newVehicle.total_cost_usd}
                 onChange={(e) => setNewVehicle({ ...newVehicle, total_cost_usd: parseFloat(e.target.value) || 0 })}
-                className="mt-1"
+                className="mt-1 h-10"
               />
             </div>
           </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddVehicleOpen(false)}>
+          <DialogFooter className="pt-3 gap-2">
+            <Button variant="outline" className="px-5" onClick={() => setIsAddVehicleOpen(false)}>
               Cancel
             </Button>
             <Button
+              className="px-6"
               onClick={() => {
                 createVehicleMutation.mutate({
                   ...newVehicle,
