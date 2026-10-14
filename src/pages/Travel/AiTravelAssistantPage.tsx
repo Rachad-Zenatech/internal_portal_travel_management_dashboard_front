@@ -60,6 +60,7 @@ export default function AiTravelAssistantPage() {
       const execRes = await travelService.getExecutives();
       if (execRes && execRes.length > 0) {
         setExecutives(execRes);
+        setSelectedExecName(execRes[0].name);
       }
       // Load recent AI conversations
       const convRes = await travelService.getAiConversations();
@@ -225,14 +226,7 @@ export default function AiTravelAssistantPage() {
               </option>
             ))}
             {executives.length === 0 && (
-              <>
-                <option value="CEO (Michael Vance)">CEO (Michael Vance)</option>
-                <option value="Sajjad">Sajjad (VP Engineering)</option>
-                <option value="Jim">Jim (VP Operations)</option>
-                <option value="Simon">Simon (VP Hardware)</option>
-                <option value="Phil">Phil (VP Flight Testing)</option>
-                <option value="Linda">Linda (VP Strategic Partnerships)</option>
-              </>
+              <option value="" disabled>No executives found in database table</option>
             )}
           </select>
         </div>
