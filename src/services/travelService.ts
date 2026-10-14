@@ -169,6 +169,12 @@ export const travelService = {
       `/api/travel/vehicles/${vehicleId}/assign-seat`,
       payload
     ),
+  assignVehicleDriver: (vehicleId: string, assignedDriver: string) =>
+    apiClient.put<{
+      status: string;
+      message: string;
+      vehicle: import("@/types/travel").TravelVehicle;
+    }>(`/api/travel/vehicles/${vehicleId}/assign-driver`, { assigned_driver: assignedDriver }),
   broadcastVehicleDeparture: (
     vehicleId: string,
     payload: import("@/types/travel").VehicleDepartureBroadcastPayload

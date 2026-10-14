@@ -174,6 +174,11 @@ export default function VehicleLibraryPage() {
   const [isAutoDetectingSpecs, setIsAutoDetectingSpecs] = useState(false);
   const [dynamicNhtsaModels, setDynamicNhtsaModels] = useState<string[]>([]);
 
+  // Reassign Driver Modal State for existing fleet vehicles
+  const [isReassignDriverModalOpen, setIsReassignDriverModalOpen] = useState(false);
+  const [reassignDriverVehicle, setReassignDriverVehicle] = useState<TravelVehicle | null>(null);
+  const [reassignDriverName, setReassignDriverName] = useState("");
+
   const [newVehicle, setNewVehicle] = useState({
     vehicle_name: formatVehicleName("Chevrolet", "Suburban High Country", 8),
     make: "Chevrolet",
@@ -190,6 +195,74 @@ export default function VehicleLibraryPage() {
     status: "active_on_road" as const,
     seat_layout: undefined as any,
   });
+
+  // Fetch event details for the event currently selected in Add Vehicle modal
+  const { data: addVehicleSelectedEvent } = useQuery({
+    queryKey: ["travelEventDetails", newVehicle.assigned_event_id],
+    queryFn: () =>
+      newVehicle.assigned_event_id
+        ? travelService.getEvent(newVehicle.assigned_event_id)
+        : Promise.resolve(null),
+    enabled: !!newVehicle.assigned_event_id,
+  });
+
+  // Fetch event details for the vehicle being reassigned a driver
+  const { data: reassignVehicleEvent } = useQuery({
+    queryKey: ["travelEventDetails", reassignDriverVehicle?.assigned_event_id],
+    queryFn: () =>
+      reassignDriverVehicle?.assigned_event_id
+        ? travelService.getEvent(reassignDriverVehicle.assigned_event_id)
+        : Promise.resolve(null),
+    enabled: !!reassignDriverVehicle?.assigned_event_id,
+  });
+
+  // Dedicated fleet operations chauffeurs & dispatchers
+  const DEDICATED_CHAUFFEURS = [
+    { name: "Marcus Vance", label: "Marcus Vance (Tactical Fleet Ops Chauffeur)" },
+    { name: "Pat (Operations)", label: "Pat (Ground Dispatch Coordinator)" },
+    { name: "Professional Executive Chauffeur", label: "Professional Chauffeur (Hertz / National)" },
+    { name: "VIP Chauffeur Service", label: "VIP Executive Chauffeur (Enterprise)" },
+  ];
+
+  // Candidates for Add Vehicle dialog driver autocomplete (deduplicated by lowercase name)
+  const addVehicleDriverCandidates = Array.from(
+    new Map(
+      [
+        ...DEDICATED_CHAUFFEURS,
+        ...(addVehicleSelectedEvent?.event?.coordinator_name
+          ? [{ name: addVehicleSelectedEvent.event.coordinator_name, label: `${addVehicleSelectedEvent.event.coordinator_name} (Trip Coordinator)` }]
+          : []),
+        ...(addVehicleSelectedEvent?.attendees || []).map((a) => ({
+          name: a.attendee_name,
+          label: `${a.attendee_name} (${a.role_in_event || "Trip Attendee"})`,
+        })),
+        ...dbExecutives.map((e) => ({
+          name: e.name,
+          label: `${e.name} (${e.title || "Executive Staff"})`,
+        })),
+      ].map((item) => [item.name.toLowerCase(), item])
+    ).values()
+  );
+
+  // Candidates for Reassign Driver dialog autocomplete
+  const reassignDriverCandidates = Array.from(
+    new Map(
+      [
+        ...DEDICATED_CHAUFFEURS,
+        ...(reassignVehicleEvent?.event?.coordinator_name
+          ? [{ name: reassignVehicleEvent.event.coordinator_name, label: `${reassignVehicleEvent.event.coordinator_name} (Trip Coordinator)` }]
+          : []),
+        ...(reassignVehicleEvent?.attendees || []).map((a) => ({
+          name: a.attendee_name,
+          label: `${a.attendee_name} (${a.role_in_event || "Trip Attendee"})`,
+        })),
+        ...dbExecutives.map((e) => ({
+          name: e.name,
+          label: `${e.name} (${e.title || "Executive Staff"})`,
+        })),
+      ].map((item) => [item.name.toLowerCase(), item])
+    ).values()
+  );
 
   // Current make benchmark rate information from PostgreSQL or catalog
   const dbMakeInfo = dbVehicleCatalog?.makes?.find(
@@ -442,7 +515,28 @@ export default function VehicleLibraryPage() {
     mutationFn: (payload: Partial<TravelVehicle>) => travelService.createVehicle(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["travelVehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["travelDashboardSummary"] });
       setIsAddVehicleOpen(false);
+      toast.success("Vehicle registered and driver assigned to Seat 1A!");
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || "Failed to create vehicle");
+    },
+  });
+
+  // Assign/Reassign Driver Mutation
+  const assignDriverMutation = useMutation({
+    mutationFn: ({ vehicleId, driverName }: { vehicleId: string; driverName: string }) =>
+      travelService.assignVehicleDriver(vehicleId, driverName),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["travelVehicles"] });
+      queryClient.invalidateQueries({ queryKey: ["travelDashboardSummary"] });
+      setIsReassignDriverModalOpen(false);
+      setReassignDriverVehicle(null);
+      toast.success(res.message || "Assigned driver updated successfully!");
+    },
+    onError: (err: any) => {
+      toast.error(err?.response?.data?.detail || "Failed to update assigned driver");
     },
   });
 
@@ -1039,8 +1133,25 @@ export default function VehicleLibraryPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-2">
-                      <span>
-                        <strong>Driver:</strong> {v.assigned_driver}
+                      <span className="flex items-center gap-1.5">
+                        <strong className="text-foreground/80">Driver:</strong>
+                        <span className="font-semibold text-foreground bg-muted/60 px-2 py-0.5 rounded border border-border/50 text-[11px]">
+                          {v.assigned_driver || "Unassigned"}
+                        </span>
+                        {!isAttendeeView && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReassignDriverVehicle(v);
+                              setReassignDriverName(v.assigned_driver || "");
+                              setIsReassignDriverModalOpen(true);
+                            }}
+                            className="text-[11px] text-primary hover:underline font-semibold ml-0.5 cursor-pointer"
+                            title="Reassign or change designated vehicle driver"
+                          >
+                            Reassign
+                          </button>
+                        )}
                       </span>
                       <span>•</span>
                       <span>
@@ -1566,14 +1677,70 @@ export default function VehicleLibraryPage() {
                 placeholder="e.g. National Emerald Club"
               />
             </div>
-            <div>
-              <Label className="text-xs font-medium">Assigned Driver / Lead</Label>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Assigned Driver / Lead</Label>
+                <span className="text-[10px] text-primary font-medium">
+                  ⚡ Auto-assigns to Seat 1A
+                </span>
+              </div>
               <Input
+                list="add-vehicle-drivers-list"
                 value={newVehicle.assigned_driver}
                 onChange={(e) => setNewVehicle({ ...newVehicle, assigned_driver: e.target.value })}
-                className="mt-1 h-10"
-                placeholder="e.g. Pat (Operations)"
+                className="mt-1 h-10 font-medium"
+                placeholder="Type or select driver from trip roster or fleet..."
               />
+              <datalist id="add-vehicle-drivers-list">
+                {addVehicleDriverCandidates.map((d) => (
+                  <option key={d.name} value={d.name} label={d.label} />
+                ))}
+              </datalist>
+
+              {/* Quick suggestion chips */}
+              <div className="flex flex-wrap items-center gap-1.5 pt-1 text-[11px]">
+                <span className="text-muted-foreground mr-0.5">Quick pick:</span>
+                {DEDICATED_CHAUFFEURS.slice(0, 2).map((c) => (
+                  <button
+                    key={c.name}
+                    type="button"
+                    onClick={() => setNewVehicle({ ...newVehicle, assigned_driver: c.name })}
+                    className={`px-2 py-0.5 rounded-md border transition-all ${
+                      newVehicle.assigned_driver === c.name
+                        ? "bg-primary text-primary-foreground border-primary font-semibold"
+                        : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60"
+                    }`}
+                  >
+                    {c.name}
+                  </button>
+                ))}
+                {addVehicleSelectedEvent?.event?.coordinator_name && (
+                  <button
+                    type="button"
+                    onClick={() => setNewVehicle({ ...newVehicle, assigned_driver: addVehicleSelectedEvent.event.coordinator_name! })}
+                    className={`px-2 py-0.5 rounded-md border transition-all ${
+                      newVehicle.assigned_driver === addVehicleSelectedEvent.event.coordinator_name
+                        ? "bg-primary text-primary-foreground border-primary font-semibold"
+                        : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60"
+                    }`}
+                  >
+                    Coord: {addVehicleSelectedEvent.event.coordinator_name.split(" ")[0]}
+                  </button>
+                )}
+                {addVehicleSelectedEvent?.attendees && addVehicleSelectedEvent.attendees.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setNewVehicle({ ...newVehicle, assigned_driver: addVehicleSelectedEvent.attendees[0].attendee_name })}
+                    className={`px-2 py-0.5 rounded-md border transition-all ${
+                      newVehicle.assigned_driver === addVehicleSelectedEvent.attendees[0].attendee_name
+                        ? "bg-primary text-primary-foreground border-primary font-semibold"
+                        : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60"
+                    }`}
+                  >
+                    Attendee: {addVehicleSelectedEvent.attendees[0].attendee_name.split(" ")[0]}
+                  </button>
+                )}
+              </div>
             </div>
             <div>
               <div className="flex items-center justify-between">
@@ -1630,6 +1797,142 @@ export default function VehicleLibraryPage() {
               Save Vehicle
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reassign Vehicle Driver Modal */}
+      <Dialog open={isReassignDriverModalOpen} onOpenChange={setIsReassignDriverModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserCheck className="h-5 w-5 text-primary" />
+              <span>Assign / Change Vehicle Driver</span>
+            </DialogTitle>
+            <DialogDescription>
+              Assign a certified lead, confirmed trip attendee, or professional chauffeur to drive{" "}
+              <strong>{reassignDriverVehicle?.vehicle_name}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {reassignDriverVehicle && (
+            <div className="space-y-4 py-2">
+              <div className="p-3 rounded-lg bg-muted/40 text-xs space-y-1.5 border border-border/50">
+                <div className="flex items-center justify-between font-semibold text-foreground">
+                  <span>{reassignDriverVehicle.vehicle_name}</span>
+                  <Badge variant="outline">{reassignDriverVehicle.seating_capacity} Seats</Badge>
+                </div>
+                <div className="text-muted-foreground">
+                  Current Driver: <strong className="text-foreground">{reassignDriverVehicle.assigned_driver || "Unassigned"}</strong>
+                </div>
+                <div className="text-muted-foreground">
+                  Assigned Trip: <strong className="text-foreground">{reassignDriverVehicle.event_title || "General Expedition"}</strong>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Select or Type Driver Name</Label>
+                  <span className="text-[11px] text-primary font-medium">⚡ Syncs with Seat 1A</span>
+                </div>
+                <Input
+                  list="reassign-driver-autocomplete-list"
+                  value={reassignDriverName}
+                  onChange={(e) => setReassignDriverName(e.target.value)}
+                  placeholder="Search attendee, executive, or chauffeur..."
+                  className="h-10 text-xs font-medium"
+                />
+                <datalist id="reassign-driver-autocomplete-list">
+                  {reassignDriverCandidates.map((d) => (
+                    <option key={d.name} value={d.name} label={d.label} />
+                  ))}
+                </datalist>
+
+                {/* Quick select pills */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
+                  <span className="text-[11px] text-muted-foreground mr-0.5">Quick pick:</span>
+                  {DEDICATED_CHAUFFEURS.slice(0, 2).map((c) => (
+                    <button
+                      key={c.name}
+                      type="button"
+                      onClick={() => setReassignDriverName(c.name)}
+                      className={`text-[11px] px-2 py-0.5 rounded-md border transition-all ${
+                        reassignDriverName === c.name
+                          ? "bg-primary text-primary-foreground border-primary font-semibold"
+                          : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60"
+                      }`}
+                    >
+                      {c.name}
+                    </button>
+                  ))}
+                  {reassignVehicleEvent?.event?.coordinator_name && (
+                    <button
+                      type="button"
+                      onClick={() => setReassignDriverName(reassignVehicleEvent.event.coordinator_name!)}
+                      className={`text-[11px] px-2 py-0.5 rounded-md border transition-all ${
+                        reassignDriverName === reassignVehicleEvent.event.coordinator_name
+                          ? "bg-primary text-primary-foreground border-primary font-semibold"
+                          : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60"
+                      }`}
+                    >
+                      Coord: {reassignVehicleEvent.event.coordinator_name.split(" ")[0]}
+                    </button>
+                  )}
+                  {reassignVehicleEvent?.attendees && reassignVehicleEvent.attendees.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setReassignDriverName(reassignVehicleEvent.attendees[0].attendee_name)}
+                      className={`text-[11px] px-2 py-0.5 rounded-md border transition-all ${
+                        reassignDriverName === reassignVehicleEvent.attendees[0].attendee_name
+                          ? "bg-primary text-primary-foreground border-primary font-semibold"
+                          : "bg-muted/50 hover:bg-muted text-muted-foreground hover:text-foreground border-border/60"
+                      }`}
+                    >
+                      Attendee: {reassignVehicleEvent.attendees[0].attendee_name.split(" ")[0]}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setReassignDriverName("Unassigned Driver")}
+                    className="text-[11px] px-2 py-0.5 rounded-md border border-border/60 text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                  >
+                    Clear Driver
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded bg-primary/10 border border-primary/20 text-[11px] text-primary flex items-start gap-2">
+                <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>
+                  Updating the driver automatically allocates them into <strong>Row 1 Seat 1A (Driver Seat)</strong> on the interactive seating matrix and updates the passenger manifest.
+                </span>
+              </div>
+
+              <DialogFooter className="pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsReassignDriverModalOpen(false)}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => {
+                    if (!reassignDriverVehicle) return;
+                    assignDriverMutation.mutate({
+                      vehicleId: reassignDriverVehicle.id,
+                      driverName: reassignDriverName.trim() || "Unassigned Driver",
+                    });
+                  }}
+                  disabled={assignDriverMutation.isPending}
+                  className="text-xs font-semibold"
+                >
+                  {assignDriverMutation.isPending ? "Assigning..." : "Save Assigned Driver"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
