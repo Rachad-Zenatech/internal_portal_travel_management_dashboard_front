@@ -387,6 +387,7 @@ export interface TravelVehicle {
   event_end_date?: string | null;
   occupied_seats_count?: number;
   available_seats_count?: number;
+  user_assigned_seat?: { position: string; row: number; occupant: string; type: string } | null;
   created_at?: string;
   updated_at?: string;
 }

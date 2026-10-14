@@ -134,10 +134,17 @@ export const travelService = {
     apiClient.get<import("@/types/travel").RealtimeBudgetForecast>("/api/travel/budgets/realtime-forecast"),
 
   // Ground Transport & Vehicle Library with Seating Capacity
-  getVehicles: (eventId?: string) =>
-    apiClient.get<import("@/types/travel").TravelVehicle[]>(
-      eventId ? `/api/travel/vehicles?event_id=${eventId}` : "/api/travel/vehicles"
-    ),
+  getVehicles: (params?: { eventId?: string; userEmail?: string; userName?: string; isAdminOverride?: boolean }) => {
+    const q = new URLSearchParams();
+    if (params?.eventId && params.eventId !== "all") q.append("event_id", params.eventId);
+    if (params?.userEmail) q.append("user_email", params.userEmail);
+    if (params?.userName) q.append("user_name", params.userName);
+    if (params?.isAdminOverride) q.append("is_admin_override", "true");
+    const qs = q.toString();
+    return apiClient.get<import("@/types/travel").TravelVehicle[]>(
+      qs ? `/api/travel/vehicles?${qs}` : "/api/travel/vehicles"
+    );
+  },
   createVehicle: (payload: Partial<import("@/types/travel").TravelVehicle>) =>
     apiClient.post<import("@/types/travel").TravelVehicle>("/api/travel/vehicles", payload),
   lookupVehicleSpecs: (params: { make: string; model?: string; year?: number; vin?: string }) => {
