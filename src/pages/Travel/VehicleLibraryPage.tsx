@@ -50,36 +50,7 @@ import {
   formatVehicleName,
 } from "@/data/vehicleCatalog";
 
-const EXECUTIVE_TRAVELERS = [
-  "Michael Vance (CEO)",
-  "Vanessa (Executive Assistant)",
-  "Rachad Quintyne (Lead Architect)",
-  "Alvin Tsang (Engineering Lead)",
-  "Sajjad (VP Engineering)",
-  "Jim (VP Operations)",
-  "Simon (VP Hardware)",
-  "Phil (VP Flight Testing)",
-  "Linda (VP Partnerships)",
-  "Marcus Vance (Ops Chauffeur)",
-];
 
-
-
-const COMMON_MODELS = [
-  "Suburban High Country",
-  "Tahoe Premier",
-  "Escalade ESV Premium",
-  "Yukon XL Denali",
-  "Expedition MAX Limited",
-  "Navigator L Reserve",
-  "Transit 350 XLT Passenger Van",
-  "Transit 250 Passenger Wagon",
-  "Sprinter 2500 Passenger",
-  "Express 3500 Passenger",
-  "Sienna Limited AWD Hybrid",
-  "Pacifica Touring L",
-  "Model X Plaid",
-];
 
 export default function VehicleLibraryPage() {
   const queryClient = useQueryClient();
@@ -166,6 +137,25 @@ export default function VehicleLibraryPage() {
     enabled: !!selectedVehicle?.assigned_event_id,
   });
 
+  // Fetch executive & staff personnel dynamically from PostgreSQL
+  const { data: dbExecutives = [] } = useQuery({
+    queryKey: ["travelExecutives"],
+    queryFn: travelService.getExecutives,
+  });
+
+  // Fetch corporate vehicle catalog & rate benchmarks dynamically from PostgreSQL
+  const { data: dbVehicleCatalog } = useQuery({
+    queryKey: ["dbVehicleCatalog"],
+    queryFn: travelService.getVehicleCatalog,
+  });
+
+  const availableMakes = dbVehicleCatalog?.makes?.map((m) => m.make) || ALL_VEHICLE_MAKES;
+  const commonModels = dbVehicleCatalog?.common_models || [];
+
+  const dynamicExecTravelers = dbExecutives.map(
+    (e) => `${e.name} (${e.title || "Company Personnel"})`
+  );
+
   // Compute available travelers for this specific vehicle/trip
   const tripAttendees = (selectedVehicleEvent?.attendees || []).map(
     (a) => `${a.attendee_name} (${a.role_in_event || "Traveler"} - ${a.attendance_status})`
@@ -173,7 +163,7 @@ export default function VehicleLibraryPage() {
 
   const availableAssignees = [
     ...tripAttendees,
-    ...EXECUTIVE_TRAVELERS.filter((exec) => !tripAttendees.some((att) => att.includes(exec.split(" ")[0]))),
+    ...dynamicExecTravelers.filter((exec) => !tripAttendees.some((att) => att.includes(exec.split(" ")[0]))),
     "Pelican Drone Case #1 (Sensors)",
     "Pelican LiPo Battery Case (Hazmat/Dry)",
     "Available (Vacant Seat)",
@@ -201,22 +191,50 @@ export default function VehicleLibraryPage() {
     seat_layout: undefined as any,
   });
 
-  // Current make benchmark rate information
-  const currentMakeRateInfo = getDefaultRateForMake(newVehicle.make);
+  // Current make benchmark rate information from PostgreSQL or catalog
+  const dbMakeInfo = dbVehicleCatalog?.makes?.find(
+    (m) => m.make.toLowerCase() === newVehicle.make.trim().toLowerCase()
+  );
+  const currentMakeRateInfo = dbMakeInfo
+    ? {
+        defaultDailyRate: dbMakeInfo.default_daily_rate,
+        rateRange: dbMakeInfo.rate_range,
+        suggestedRates: dbMakeInfo.suggested_rates,
+      }
+    : getDefaultRateForMake(newVehicle.make);
 
-  // Available models for currently selected make
-  const catalogModelsForMake = getModelsForMake(newVehicle.make);
+  // Available models for currently selected make from PostgreSQL or catalog
+  const dbModelsForMake = (dbVehicleCatalog?.models || [])
+    .filter((m) => m.make.toLowerCase() === newVehicle.make.trim().toLowerCase())
+    .map((m) => ({
+      model: m.model,
+      seats: m.seating_capacity,
+      cargoCases: m.cargo_cases_capacity,
+      vehicleClass: m.vehicle_class,
+      dailyRate: m.default_daily_rate,
+      agency: m.preferred_agency,
+    }));
+  const catalogModelsForMake = dbModelsForMake.length > 0 ? dbModelsForMake : getModelsForMake(newVehicle.make);
+
   const availableModelOptions = Array.from(
     new Set([
       ...catalogModelsForMake.map((m) => m.model),
       ...dynamicNhtsaModels,
-      ...COMMON_MODELS,
+      ...commonModels,
     ])
   );
 
   // 1. User types or chooses Make -> automatically suggests rate & loads models & updates vehicle name
   const handleMakeChange = (makeVal: string) => {
-    const rateData = getDefaultRateForMake(makeVal);
+    const dbFound = dbVehicleCatalog?.makes?.find((m) => m.make.toLowerCase() === makeVal.trim().toLowerCase());
+    const rateData = dbFound
+      ? {
+          defaultDailyRate: dbFound.default_daily_rate,
+          rateRange: dbFound.rate_range,
+          suggestedRates: dbFound.suggested_rates,
+        }
+      : getDefaultRateForMake(makeVal);
+
     setNewVehicle((prev) => ({
       ...prev,
       make: makeVal,
@@ -1319,8 +1337,8 @@ export default function VehicleLibraryPage() {
                       ))}
                     </optgroup>
                   )}
-                  <optgroup label="Executive & Corporate Travelers">
-                    {EXECUTIVE_TRAVELERS.map((t) => (
+                  <optgroup label="Executive & Corporate Travelers (from Database)">
+                    {dynamicExecTravelers.map((t) => (
                       <option key={t} value={t}>
                         {t}
                       </option>
@@ -1425,7 +1443,7 @@ export default function VehicleLibraryPage() {
               <div className="flex items-center justify-between">
                 <Label className="text-xs font-medium">Make</Label>
                 <span className="text-[11px] text-muted-foreground font-medium">
-                  {ALL_VEHICLE_MAKES.length}+ Global Brands
+                  {availableMakes.length}+ Global Brands (PostgreSQL DB)
                 </span>
               </div>
               <Input
@@ -1436,7 +1454,7 @@ export default function VehicleLibraryPage() {
                 placeholder="e.g. Chevrolet, Ford, Cadillac..."
               />
               <datalist id="all-vehicle-makes-list">
-                {ALL_VEHICLE_MAKES.map((m) => (
+                {availableMakes.map((m) => (
                   <option key={m} value={m} />
                 ))}
               </datalist>

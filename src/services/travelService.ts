@@ -147,6 +147,8 @@ export const travelService = {
   },
   createVehicle: (payload: Partial<import("@/types/travel").TravelVehicle>) =>
     apiClient.post<import("@/types/travel").TravelVehicle>("/api/travel/vehicles", payload),
+  getVehicleCatalog: () =>
+    apiClient.get<import("@/types/travel").VehicleCatalogResponse>("/api/travel/vehicles/catalog"),
   lookupVehicleSpecs: (params: { make: string; model?: string; year?: number; vin?: string }) => {
     const query = new URLSearchParams();
     query.append("make", params.make);

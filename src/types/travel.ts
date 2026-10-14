@@ -531,4 +531,31 @@ export interface ReceiptsApiResponse {
   stats: ReceiptStatsSummary;
 }
 
+export interface VehicleCatalogMake {
+  make: string;
+  default_daily_rate: number;
+  rate_range: string;
+  suggested_rates: number[];
+}
+
+export interface VehicleCatalogModel {
+  make: string;
+  model: string;
+  category: string;
+  vehicle_class: string;
+  seating_capacity: number;
+  cargo_cases_capacity: number;
+  default_daily_rate: number;
+  rate_range: string;
+  is_common_model: boolean;
+  preferred_agency?: string;
+}
+
+export interface VehicleCatalogResponse {
+  makes: VehicleCatalogMake[];
+  models: VehicleCatalogModel[];
+  common_models: string[];
+}
+
+
 
