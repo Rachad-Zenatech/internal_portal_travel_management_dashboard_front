@@ -31,7 +31,6 @@ const ExecutiveProfilesPage = lazy(() => import("./pages/Travel/ExecutiveProfile
 const VehicleLibraryPage = lazy(() => import("./pages/Travel/VehicleLibraryPage"));
 const TravelCalendarPage = lazy(() => import("./pages/Travel/TravelCalendarPage"));
 const ReceiptExpensePage = lazy(() => import("./pages/Travel/ReceiptExpensePage"));
-const FlightExplorerPage = lazy(() => import("./pages/Travel/FlightExplorerPage"));
 
 function NotFoundAlert() {
   return (
@@ -91,7 +90,7 @@ function App() {
               <Route path="/travel/stipends" element={<TravelStipendPage />} />
               <Route path="/travel/drone-cargo" element={<DroneCargoPage />} />
               <Route path="/travel/vehicles" element={<VehicleLibraryPage />} />
-              <Route path="/travel/flights" element={<FlightExplorerPage />} />
+              <Route path="/travel/flights" element={<Navigate to="/travel/ai-assistant" replace />} />
               <Route path="/travel/calendar" element={<TravelCalendarPage />} />
               <Route path="/travel/receipts" element={<ReceiptExpensePage />} />
 

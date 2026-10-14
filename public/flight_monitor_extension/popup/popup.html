@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Flight Explorer Monitor</title>
+  <style>
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 16px;
+      background: #090d16;
+      color: #f1f5f9;
+      box-sizing: border-box;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid #1e293b;
+      padding-bottom: 12px;
+      margin-bottom: 12px;
+    }
+    .logo-badge {
+      background: #0284c7;
+      color: white;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 13px;
+    }
+    .title {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .subtitle {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .status-card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+    }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .status-row:last-child {
+      margin-bottom: 0;
+    }
+    .label {
+      color: #9ca3af;
+    }
+    .val {
+      font-weight: 600;
+      color: #38bdf8;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-active {
+      background: rgba(34, 197, 94, 0.15);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.3);
+    }
+    .badge-idle {
+      background: rgba(148, 163, 184, 0.15);
+      color: #94a3b8;
+    }
+    .footer {
+      font-size: 11px;
+      color: #64748b;
+      text-align: center;
+      margin-top: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo-badge">✈ FE</div>
+    <div>
+      <div class="title">Booking Monitor</div>
+      <div class="subtitle">Real-time airline capture</div>
+    </div>
+  </div>
+
+  <div class="status-card">
+    <div class="status-row">
+      <span class="label">Monitor Status</span>
+      <span id="monitor-status" class="badge badge-active">LISTENING</span>
+    </div>
+    <div class="status-row">
+      <span class="label">Supported Airline</span>
+      <span class="val">Air Canada</span>
+    </div>
+    <div class="status-row">
+      <span class="label">Active Session</span>
+      <span id="active-session" class="val">None</span>
+    </div>
+    <div class="status-row">
+      <span class="label">Target Server</span>
+      <span id="api-server" class="val">localhost:8008</span>
+    </div>
+  </div>
+
+  <div class="footer">
+    Privacy Protected: Passwords and credit cards are never captured.
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

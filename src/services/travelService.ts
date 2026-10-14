@@ -217,5 +217,6 @@ export const travelService = {
     apiClient.put<import("@/types/travel").TravelReceipt>(`/api/travel/receipts/${receiptId}`, payload),
   deleteReceipt: (receiptId: string) =>
     apiClient.delete<{ message: string }>(`/api/travel/receipts/${receiptId}`),
+  getCurrencies: () =>
+    apiClient.get<import("@/types/travel").CurrenciesApiResponse>("/api/travel/receipts/currencies"),
 };
-
