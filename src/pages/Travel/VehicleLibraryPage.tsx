@@ -47,6 +47,7 @@ import {
   getModelsForMake,
   getDefaultRateForMake,
   resolveVehicleSpecs,
+  formatVehicleName,
 } from "@/data/vehicleCatalog";
 
 const EXECUTIVE_TRAVELERS = [
@@ -349,7 +350,7 @@ export default function VehicleLibraryPage() {
   const [dynamicNhtsaModels, setDynamicNhtsaModels] = useState<string[]>([]);
 
   const [newVehicle, setNewVehicle] = useState({
-    vehicle_name: "Executive Suburban 1",
+    vehicle_name: formatVehicleName("Chevrolet", "Suburban High Country", 8),
     make: "Chevrolet",
     model: "Suburban High Country",
     year: 2026,
@@ -378,12 +379,13 @@ export default function VehicleLibraryPage() {
     ])
   );
 
-  // 1. User types or chooses Make -> automatically suggests rate & loads models
+  // 1. User types or chooses Make -> automatically suggests rate & loads models & updates vehicle name
   const handleMakeChange = (makeVal: string) => {
     const rateData = getDefaultRateForMake(makeVal);
     setNewVehicle((prev) => ({
       ...prev,
       make: makeVal,
+      vehicle_name: formatVehicleName(makeVal, prev.model, prev.seating_capacity),
       daily_rate_usd: rateData.defaultDailyRate,
       total_cost_usd: rateData.defaultDailyRate * 5,
     }));
@@ -407,7 +409,7 @@ export default function VehicleLibraryPage() {
     );
   };
 
-  // 2. User types or chooses Model -> AUTOMATICALLY sets seating capacity & cargo!
+  // 2. User types or chooses Model -> AUTOMATICALLY sets seating capacity, cargo & vehicle name!
   const handleModelChange = (modelVal: string) => {
     const cleanModel = modelVal.trim();
     const resolved = resolveVehicleSpecs(newVehicle.make, cleanModel);
@@ -419,13 +421,10 @@ export default function VehicleLibraryPage() {
         seating_capacity: resolved.seats,
         cargo_cases_capacity: resolved.cargoCases,
         vehicle_class: resolved.vehicleClass,
+        vehicle_name: formatVehicleName(newVehicle.make, modelVal, resolved.seats),
         daily_rate_usd: resolved.dailyRate || prev.daily_rate_usd,
         total_cost_usd: (resolved.dailyRate || prev.daily_rate_usd) * 5,
         rental_agency: resolved.agency || prev.rental_agency,
-        vehicle_name:
-          prev.vehicle_name === "Executive Suburban 1" || !prev.vehicle_name.trim()
-            ? `${newVehicle.make || ""} ${cleanModel} 1`.trim()
-            : prev.vehicle_name,
       }));
 
       setAutoDetectNotice(
@@ -435,6 +434,7 @@ export default function VehicleLibraryPage() {
       setNewVehicle((prev) => ({
         ...prev,
         model: modelVal,
+        vehicle_name: formatVehicleName(newVehicle.make, modelVal, prev.seating_capacity),
       }));
     }
 
@@ -452,6 +452,7 @@ export default function VehicleLibraryPage() {
               seating_capacity: live.amount_of_seats,
               cargo_cases_capacity: live.cargo_pelican_capacity,
               vehicle_class: live.vehicle_class,
+              vehicle_name: formatVehicleName(newVehicle.make, cleanModel, live.amount_of_seats),
               seat_layout: live.default_seat_layout,
             }));
             setAutoDetectNotice(
@@ -475,7 +476,7 @@ export default function VehicleLibraryPage() {
 
     setNewVehicle((prev) => ({
       ...prev,
-      vehicle_name: preset.name,
+      vehicle_name: formatVehicleName(preset.make, preset.model, preset.seating_capacity),
       make: preset.make,
       model: preset.model,
       vehicle_class: preset.vehicle_class,
@@ -509,6 +510,7 @@ export default function VehicleLibraryPage() {
         seating_capacity: res.amount_of_seats,
         cargo_cases_capacity: res.cargo_pelican_capacity,
         vehicle_class: res.vehicle_class,
+        vehicle_name: formatVehicleName(res.make, res.model || prev.model, res.amount_of_seats),
         seat_layout: res.default_seat_layout,
       }));
       setAutoDetectNotice(
@@ -1651,12 +1653,17 @@ export default function VehicleLibraryPage() {
               </select>
             </div>
             <div className="col-span-1 sm:col-span-2">
-              <Label className="text-xs font-medium">Vehicle Display Name</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Vehicle Display Name</Label>
+                <span className="text-[11px] text-muted-foreground font-medium">
+                  ⚡ Auto-named from Make + Model + Capacity
+                </span>
+              </div>
               <Input
                 value={newVehicle.vehicle_name}
                 onChange={(e) => setNewVehicle({ ...newVehicle, vehicle_name: e.target.value })}
-                className="mt-1 h-10"
-                placeholder="e.g. Executive Suburban 1"
+                className="mt-1 h-10 font-semibold text-foreground"
+                placeholder="e.g. Chevrolet Suburban High Country (8 Seats)"
               />
             </div>
             <div>
@@ -1750,7 +1757,14 @@ export default function VehicleLibraryPage() {
                 min={2}
                 max={20}
                 value={newVehicle.seating_capacity}
-                onChange={(e) => setNewVehicle({ ...newVehicle, seating_capacity: parseInt(e.target.value) || 7 })}
+                onChange={(e) => {
+                  const cap = parseInt(e.target.value) || 0;
+                  setNewVehicle((prev) => ({
+                    ...prev,
+                    seating_capacity: cap,
+                    vehicle_name: formatVehicleName(prev.make, prev.model, cap),
+                  }));
+                }}
                 className="mt-1 h-10 font-semibold"
               />
             </div>

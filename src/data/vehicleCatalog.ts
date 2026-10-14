@@ -1305,3 +1305,23 @@ export function inferVehicleHeuristics(
     dailyRate: 180,
   };
 }
+
+export function formatVehicleName(
+  make: string,
+  model: string,
+  capacity: number
+): string {
+  const mk = (make || "").trim();
+  const mdl = (model || "").trim();
+  const capStr = capacity ? `(${capacity} Seats)` : "";
+
+  if (mk && mdl) {
+    const cleanMdl = mdl.toLowerCase().startsWith(mk.toLowerCase())
+      ? mdl.slice(mk.length).trim()
+      : mdl;
+    return `${mk} ${cleanMdl} ${capStr}`.replace(/\s+/g, " ").trim();
+  }
+  if (mdl) return `${mdl} ${capStr}`.replace(/\s+/g, " ").trim();
+  if (mk) return `${mk} Fleet Unit ${capStr}`.replace(/\s+/g, " ").trim();
+  return `Vehicle Unit ${capStr}`.trim();
+}
