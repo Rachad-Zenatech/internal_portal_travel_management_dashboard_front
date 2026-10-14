@@ -63,170 +63,7 @@ const EXECUTIVE_TRAVELERS = [
   "Marcus Vance (Ops Chauffeur)",
 ];
 
-interface FleetPreset {
-  category: string;
-  name: string;
-  make: string;
-  model: string;
-  seating_capacity: number;
-  cargo_cases_capacity: number;
-  vehicle_class: string;
-  rental_agency: string;
-  daily_rate_usd: number;
-  description: string;
-}
 
-const FLEET_PRESETS: FleetPreset[] = [
-  // Full-Size Extended SUVs
-  {
-    category: "Full-Size Extended SUVs (7-8 Seats)",
-    name: "Executive Suburban 1",
-    make: "Chevrolet",
-    model: "Suburban High Country",
-    seating_capacity: 8,
-    cargo_cases_capacity: 6,
-    vehicle_class: "Full-Size Extended SUV",
-    rental_agency: "National Emerald Club",
-    daily_rate_usd: 210,
-    description: "8 Seats • 6 Pelican Cases • Executive VIP",
-  },
-  {
-    category: "Full-Size Extended SUVs (7-8 Seats)",
-    name: "VIP Escalade ESV",
-    make: "Cadillac",
-    model: "Escalade ESV Premium",
-    seating_capacity: 7,
-    cargo_cases_capacity: 5,
-    vehicle_class: "Luxury Extended SUV",
-    rental_agency: "Hertz President's Circle",
-    daily_rate_usd: 275,
-    description: "7 Seats • 5 Pelican Cases • VIP Chauffeur",
-  },
-  {
-    category: "Full-Size Extended SUVs (7-8 Seats)",
-    name: "Ops Yukon XL",
-    make: "GMC",
-    model: "Yukon XL Denali",
-    seating_capacity: 8,
-    cargo_cases_capacity: 6,
-    vehicle_class: "Full-Size Extended SUV",
-    rental_agency: "Avis Preferred",
-    daily_rate_usd: 220,
-    description: "8 Seats • 6 Pelican Cases • Heavy Duty",
-  },
-  {
-    category: "Full-Size Extended SUVs (7-8 Seats)",
-    name: "Expedition MAX Team",
-    make: "Ford",
-    model: "Expedition MAX Limited",
-    seating_capacity: 8,
-    cargo_cases_capacity: 6,
-    vehicle_class: "Full-Size Extended SUV",
-    rental_agency: "Enterprise Plus",
-    daily_rate_usd: 205,
-    description: "8 Seats • 6 Pelican Cases • Spacious Crew",
-  },
-  {
-    category: "Full-Size Extended SUVs (7-8 Seats)",
-    name: "Navigator L Reserve",
-    make: "Lincoln",
-    model: "Navigator L Reserve",
-    seating_capacity: 7,
-    cargo_cases_capacity: 5,
-    vehicle_class: "Luxury Extended SUV",
-    rental_agency: "Sixt Executive",
-    daily_rate_usd: 265,
-    description: "7 Seats • 5 Pelican Cases • Executive Shuttle",
-  },
-
-  // High-Capacity Passenger Vans & Shuttles
-  {
-    category: "High-Capacity Passenger Shuttles (12-15 Seats)",
-    name: "Flight Crew Transit 350",
-    make: "Ford",
-    model: "Transit 350 XLT Passenger Van",
-    seating_capacity: 15,
-    cargo_cases_capacity: 10,
-    vehicle_class: "15-Passenger Extended Van",
-    rental_agency: "Enterprise Commercial",
-    daily_rate_usd: 240,
-    description: "15 Seats • 10 Pelican Cases • Full Flight Crew",
-  },
-  {
-    category: "High-Capacity Passenger Shuttles (12-15 Seats)",
-    name: "Avionics Transit 250",
-    make: "Ford",
-    model: "Transit 250 Passenger Wagon",
-    seating_capacity: 12,
-    cargo_cases_capacity: 8,
-    vehicle_class: "12-Passenger Shuttle Van",
-    rental_agency: "Budget Van Fleet",
-    daily_rate_usd: 215,
-    description: "12 Seats • 8 Pelican Cases • Field Ops",
-  },
-  {
-    category: "High-Capacity Passenger Shuttles (12-15 Seats)",
-    name: "Executive Sprinter Shuttle",
-    make: "Mercedes-Benz",
-    model: "Sprinter 2500 Passenger",
-    seating_capacity: 12,
-    cargo_cases_capacity: 8,
-    vehicle_class: "Luxury Passenger Shuttle",
-    rental_agency: "Blacklane / Executive Fleet",
-    daily_rate_usd: 320,
-    description: "12 Seats • 8 Pelican Cases • High Roof Shuttle",
-  },
-  {
-    category: "High-Capacity Passenger Shuttles (12-15 Seats)",
-    name: "Express Heavy Passenger 3500",
-    make: "Chevrolet",
-    model: "Express 3500 Passenger",
-    seating_capacity: 15,
-    cargo_cases_capacity: 10,
-    vehicle_class: "15-Passenger Commercial Van",
-    rental_agency: "Hertz Commercial",
-    daily_rate_usd: 230,
-    description: "15 Seats • 10 Pelican Cases • Event Shuttle",
-  },
-
-  // Minivans & Executive Crossovers
-  {
-    category: "Minivans & Luxury Crossovers (6-8 Seats)",
-    name: "Support Sienna Hybrid",
-    make: "Toyota",
-    model: "Sienna Limited AWD Hybrid",
-    seating_capacity: 8,
-    cargo_cases_capacity: 5,
-    vehicle_class: "Minivan Hybrid",
-    rental_agency: "National Emerald Club",
-    daily_rate_usd: 165,
-    description: "8 Seats • 5 Pelican Cases • High Efficiency",
-  },
-  {
-    category: "Minivans & Luxury Crossovers (6-8 Seats)",
-    name: "Staff Pacifica Van",
-    make: "Chrysler",
-    model: "Pacifica Touring L",
-    seating_capacity: 7,
-    cargo_cases_capacity: 5,
-    vehicle_class: "Passenger Minivan",
-    rental_agency: "Avis Preferred",
-    daily_rate_usd: 170,
-    description: "7 Seats • 5 Pelican Cases • Stow'n Go",
-  },
-  {
-    category: "Minivans & Luxury Crossovers (6-8 Seats)",
-    name: "VIP Tesla Model X",
-    make: "Tesla",
-    model: "Model X Plaid",
-    seating_capacity: 6,
-    cargo_cases_capacity: 3,
-    vehicle_class: "Electric Luxury SUV",
-    rental_agency: "Hertz EV Fleet",
-    daily_rate_usd: 290,
-    description: "6 Seats • 3 Pelican Cases • Zero Emission VIP",
-  },
-];
 
 const COMMON_MODELS = [
   "Suburban High Country",
@@ -344,9 +181,7 @@ export default function VehicleLibraryPage() {
 
   // Add Vehicle Dialog State
   const [isAddVehicleOpen, setIsAddVehicleOpen] = useState(false);
-  const [selectedPresetIndex, setSelectedPresetIndex] = useState<string>("");
   const [isAutoDetectingSpecs, setIsAutoDetectingSpecs] = useState(false);
-  const [autoDetectNotice, setAutoDetectNotice] = useState<string | null>(null);
   const [dynamicNhtsaModels, setDynamicNhtsaModels] = useState<string[]>([]);
 
   const [newVehicle, setNewVehicle] = useState({
@@ -404,9 +239,6 @@ export default function VehicleLibraryPage() {
       setDynamicNhtsaModels([]);
     }
 
-    setAutoDetectNotice(
-      `⚡ Make set to ${makeVal}: Benchmark Rate is $${rateData.defaultDailyRate}/day (${rateData.rateRange}). Pick or type a model below to auto-populate seating capacity!`
-    );
   };
 
   // 2. User types or chooses Model -> AUTOMATICALLY sets seating capacity, cargo & vehicle name!
@@ -426,10 +258,6 @@ export default function VehicleLibraryPage() {
         total_cost_usd: (resolved.dailyRate || prev.daily_rate_usd) * 5,
         rental_agency: resolved.agency || prev.rental_agency,
       }));
-
-      setAutoDetectNotice(
-        `✓ Auto-detected: ${resolved.seats} Seats • ${resolved.cargoCases} Pelican Cases • ${resolved.vehicleClass} • $${resolved.dailyRate}/day`
-      );
     } else {
       setNewVehicle((prev) => ({
         ...prev,
@@ -455,9 +283,6 @@ export default function VehicleLibraryPage() {
               vehicle_name: formatVehicleName(newVehicle.make, cleanModel, live.amount_of_seats),
               seat_layout: live.default_seat_layout,
             }));
-            setAutoDetectNotice(
-              `✓ Library Spec Confirmed: ${live.amount_of_seats} Seats • ${live.cargo_pelican_capacity} Pelican Cases • ${live.seat_configuration}`
-            );
           }
         } catch {
           // Keep local catalog result
@@ -465,32 +290,6 @@ export default function VehicleLibraryPage() {
       }, 500);
       return () => clearTimeout(timer);
     }
-  };
-
-  const handleSelectPreset = (indexStr: string) => {
-    setSelectedPresetIndex(indexStr);
-    if (!indexStr) return;
-    const idx = parseInt(indexStr, 10);
-    const preset = FLEET_PRESETS[idx];
-    if (!preset) return;
-
-    setNewVehicle((prev) => ({
-      ...prev,
-      vehicle_name: formatVehicleName(preset.make, preset.model, preset.seating_capacity),
-      make: preset.make,
-      model: preset.model,
-      vehicle_class: preset.vehicle_class,
-      seating_capacity: preset.seating_capacity,
-      cargo_cases_capacity: preset.cargo_cases_capacity,
-      rental_agency: preset.rental_agency,
-      daily_rate_usd: preset.daily_rate_usd,
-      total_cost_usd: preset.daily_rate_usd * 5,
-    }));
-
-    setAutoDetectNotice(
-      `✓ Auto-completed from Library: ${preset.seating_capacity} Seats • ${preset.cargo_cases_capacity} Pelican Cases • ${preset.vehicle_class}`
-    );
-    toast.success(`Loaded "${preset.name}" (${preset.seating_capacity} seats) from Vehicle Library`);
   };
 
   const handleAutoDetectSpecs = async (makeToUse?: string, modelToUse?: string) => {
@@ -513,9 +312,6 @@ export default function VehicleLibraryPage() {
         vehicle_name: formatVehicleName(res.make, res.model || prev.model, res.amount_of_seats),
         seat_layout: res.default_seat_layout,
       }));
-      setAutoDetectNotice(
-        `✓ Resolved from Vehicle Library (${res.source}): ${res.amount_of_seats} Seats • ${res.cargo_pelican_capacity} Pelican Cases • ${res.seat_configuration}`
-      );
       toast.success(`Auto-detected specs for ${res.make} ${res.model}: ${res.amount_of_seats} Seats!`);
     } catch (err) {
       console.error("Auto-detect failed", err);
@@ -1595,47 +1391,6 @@ export default function VehicleLibraryPage() {
               Register a new SUV, executive van, or passenger shuttle linked to a specific travel trip.
             </DialogDescription>
           </DialogHeader>
-
-          {/* Quick Library Auto-Complete Preset Bar */}
-          <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-2.5 mt-1 shadow-xs">
-            <div className="flex items-center justify-between">
-              <Label className="text-sm font-semibold text-primary flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary animate-pulse" />
-                ⚡ Auto-Complete from Vehicle Spec Library
-              </Label>
-              <Badge variant="outline" className="text-xs font-semibold bg-primary/10 border-primary/30 text-primary px-2.5 py-0.5">
-                1-Click Presets
-              </Badge>
-            </div>
-            <select
-              value={selectedPresetIndex}
-              onChange={(e) => handleSelectPreset(e.target.value)}
-              className="w-full rounded-lg border border-primary/30 bg-background px-3.5 py-2.5 text-sm font-medium focus:ring-2 focus:ring-primary shadow-xs"
-            >
-              <option value="">-- Choose a vehicle preset from library to auto-fill --</option>
-              {Object.entries(
-                FLEET_PRESETS.reduce<Record<string, { preset: FleetPreset; index: number }[]>>((acc, p, idx) => {
-                  acc[p.category] = acc[p.category] || [];
-                  acc[p.category].push({ preset: p, index: idx });
-                  return acc;
-                }, {})
-              ).map(([category, items]) => (
-                <optgroup key={category} label={category}>
-                  {items.map(({ preset, index }) => (
-                    <option key={preset.name} value={String(index)}>
-                      {preset.make} {preset.model} ({preset.seating_capacity} Seats • {preset.cargo_cases_capacity} Cases • ${preset.daily_rate_usd}/day)
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-            {autoDetectNotice && (
-              <div className="text-xs text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-2 pt-1 bg-emerald-500/10 border border-emerald-500/20 rounded-md p-2.5">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
-                <span>{autoDetectNotice}</span>
-              </div>
-            )}
-          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2 text-sm">
             <div className="col-span-1 sm:col-span-2">
