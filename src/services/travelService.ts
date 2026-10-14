@@ -183,5 +183,39 @@ export const travelService = {
     apiClient.post<import("@/types/travel").EventScheduleItem>("/api/travel/calendar/schedule", payload),
   deleteScheduleItem: (itemId: string) =>
     apiClient.delete<{ message: string }>(`/api/travel/calendar/schedule/${itemId}`),
+
+  // Receipts & AI OCR Extraction
+  uploadAndExtractReceipt: (formData: FormData) =>
+    apiClient.post<import("@/types/travel").ReceiptExtractionResult>(
+      "/api/travel/receipts/upload-extract",
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    ),
+  createReceipt: (payload: Partial<import("@/types/travel").TravelReceipt>) =>
+    apiClient.post<import("@/types/travel").TravelReceipt>("/api/travel/receipts", payload),
+  getReceipts: (params?: {
+    eventId?: string;
+    userEmail?: string;
+    status?: string;
+    category?: string;
+    isAdminOverride?: boolean;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.eventId && params.eventId !== "all") q.append("event_id", params.eventId);
+    if (params?.userEmail) q.append("user_email", params.userEmail);
+    if (params?.status && params.status !== "all") q.append("status", params.status);
+    if (params?.category && params.category !== "all") q.append("category", params.category);
+    if (params?.isAdminOverride) q.append("is_admin_override", "true");
+    const qs = q.toString();
+    return apiClient.get<import("@/types/travel").ReceiptsApiResponse>(
+      qs ? `/api/travel/receipts?${qs}` : "/api/travel/receipts"
+    );
+  },
+  getReceipt: (receiptId: string) =>
+    apiClient.get<import("@/types/travel").TravelReceipt>(`/api/travel/receipts/${receiptId}`),
+  updateReceipt: (receiptId: string, payload: Partial<import("@/types/travel").TravelReceipt>) =>
+    apiClient.put<import("@/types/travel").TravelReceipt>(`/api/travel/receipts/${receiptId}`, payload),
+  deleteReceipt: (receiptId: string) =>
+    apiClient.delete<{ message: string }>(`/api/travel/receipts/${receiptId}`),
 };
 

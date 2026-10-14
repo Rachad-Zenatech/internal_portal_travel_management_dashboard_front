@@ -437,3 +437,75 @@ export interface TripScheduleResponse {
   total_items: number;
 }
 
+export interface ReceiptLineItem {
+  description: string;
+  quantity: number;
+  unit_price: number;
+  amount: number;
+}
+
+export interface TravelReceipt {
+  id: string;
+  event_id?: string | null;
+  user_email: string;
+  user_name: string;
+  receipt_number?: string | null;
+  merchant_name: string;
+  transaction_date: string;
+  total_amount: number;
+  tax_amount: number;
+  tip_amount: number;
+  currency: string;
+  expense_category: "flight" | "lodging" | "ground_transport" | "meals_entertainment" | "drone_gear_cargo" | "fuel" | "equipment_supplies" | "other" | string;
+  payment_method: string;
+  line_items: ReceiptLineItem[];
+  raw_extracted_text?: string | null;
+  extraction_confidence: number;
+  extraction_metadata?: Record<string, any>;
+  file_name?: string | null;
+  file_type?: string | null;
+  file_size_bytes?: number;
+  file_data?: string | null;
+  status: "draft" | "pending_approval" | "approved" | "reimbursed" | "rejected";
+  notes?: string | null;
+  event_title?: string | null;
+  event_location?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ReceiptExtractionResult {
+  merchant_name: string;
+  transaction_date: string;
+  total_amount: number;
+  tax_amount: number;
+  tip_amount: number;
+  currency: string;
+  expense_category: string;
+  payment_method: string;
+  receipt_number?: string | null;
+  line_items: ReceiptLineItem[];
+  extraction_confidence: number;
+  raw_extracted_text: string;
+  extraction_metadata: Record<string, any>;
+  file_name: string;
+  file_type: string;
+  file_size_bytes: number;
+  file_data?: string | null;
+  event_id?: string | null;
+}
+
+export interface ReceiptStatsSummary {
+  total_receipts: number;
+  total_amount: number;
+  pending_amount: number;
+  approved_amount: number;
+  reimbursed_amount: number;
+}
+
+export interface ReceiptsApiResponse {
+  receipts: TravelReceipt[];
+  stats: ReceiptStatsSummary;
+}
+
+
