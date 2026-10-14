@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { travelService } from "@/services/travelService";
 import { useAuth } from "@/lib/AuthContext";
-import type { TravelReceipt, ReceiptExtractionResult, TravelEvent } from "@/types/travel";
+import type { TravelReceipt, ReceiptExtractionResult, TravelEvent, ReceiptLineItem } from "@/types/travel";
 import {
   Receipt,
   UploadCloud,
@@ -50,6 +50,21 @@ export default function ReceiptExpensePage() {
   const queryClient = useQueryClient();
   const { user, roles } = useAuth();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Safe helper to reliably parse line_items even if serialized as string from PostgreSQL JSONB
+  const getSafeLineItems = (items: any): ReceiptLineItem[] => {
+    if (!items) return [];
+    if (Array.isArray(items)) return items;
+    if (typeof items === "string") {
+      try {
+        const parsed = JSON.parse(items);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
 
   // Leadership role check (CEO, EA, Lead, Super Admin)
   const isActualLeader = Boolean(
@@ -915,13 +930,13 @@ PAYMENT: CORPORATE AMEX`;
             </div>
 
             {/* Line Items Breakdown */}
-            {extractedPreview?.line_items && extractedPreview.line_items.length > 0 && (
+            {getSafeLineItems(extractedPreview?.line_items).length > 0 && (
               <div className="space-y-1.5 pt-2">
                 <span className="text-xs font-semibold text-foreground block">
                   Extracted Line Items:
                 </span>
                 <div className="rounded-lg border bg-muted/30 p-2 space-y-1.5">
-                  {extractedPreview.line_items.map((li, idx) => (
+                  {getSafeLineItems(extractedPreview?.line_items).map((li, idx) => (
                     <div key={idx} className="flex items-center justify-between text-xs">
                       <span className="text-foreground">
                         {li.quantity}x {li.description}
@@ -1057,12 +1072,38 @@ PAYMENT: CORPORATE AMEX`;
                   </div>
                 </div>
 
+                {/* Physical / Digital Folio Document Preview */}
+                {selectedReceiptDetail.file_data && (
+                  <div className="rounded-lg border overflow-hidden bg-black/5 dark:bg-black/40 p-2 flex flex-col items-center">
+                    <span className="text-[10px] uppercase font-bold text-muted-foreground self-start mb-1">
+                      Attached Folio / Receipt Document
+                    </span>
+                    {selectedReceiptDetail.file_type?.includes("pdf") ? (
+                      <iframe
+                        src={selectedReceiptDetail.file_data}
+                        className="w-full h-64 rounded border-0"
+                        title="Folio Document"
+                      />
+                    ) : (
+                      <img
+                        src={
+                          selectedReceiptDetail.file_data.startsWith("data:") || selectedReceiptDetail.file_data.startsWith("http")
+                            ? selectedReceiptDetail.file_data
+                            : `data:${selectedReceiptDetail.file_type || "image/jpeg"};base64,${selectedReceiptDetail.file_data}`
+                        }
+                        alt={selectedReceiptDetail.merchant_name}
+                        className="max-h-72 object-contain rounded shadow-xs"
+                      />
+                    )}
+                  </div>
+                )}
+
                 {/* Line Items */}
-                {selectedReceiptDetail.line_items && selectedReceiptDetail.line_items.length > 0 && (
+                {getSafeLineItems(selectedReceiptDetail.line_items).length > 0 && (
                   <div className="space-y-1.5">
                     <span className="font-semibold text-foreground block">Itemized Charges:</span>
                     <div className="rounded-lg border bg-muted/30 p-2.5 space-y-1.5">
-                      {selectedReceiptDetail.line_items.map((li, idx) => (
+                      {getSafeLineItems(selectedReceiptDetail.line_items).map((li, idx) => (
                         <div key={idx} className="flex items-center justify-between">
                           <span>
                             {li.quantity}x {li.description}
