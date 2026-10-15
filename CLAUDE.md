@@ -56,3 +56,33 @@ When the user asks to convert this frontend (`Template_Automation_Front`) into a
    ```
 3. **Vite Bundler Aliases**: Update `vite.config.ts` with `react-native-web` aliases and `codegenShim`.
 4. **Navigation Container**: Wrap native mobile entrypoints with React Navigation `<NavigationContainer>` while maintaining the web React Router hierarchy.
+
+---
+
+## 5. Mobile & Responsive UI Guidelines (Mandatory)
+
+When coding any UI component, page, modal, or layout for this project:
+
+1. **Mobile-First & Responsive by Default**:
+   - Every view MUST be fully responsive and tested against mobile viewports (`phone`: 375px, `large`: 480px, `tablet`: 768px, `laptop`: 992px).
+   - Use responsive flex and grid wrappers (`flex-col sm:flex-row`, `grid-cols-1 md:grid-cols-2 lg:grid-cols-4`).
+   - Never write desktop-only fixed widths or overflow-inducing layouts.
+
+2. **Mobile Navigation & Sandwich (Drawer) Menu**:
+   - The sandwich menu overlay (`Sidebar.tsx`) MUST automatically close when any navigation link, sub-item, or logo is tapped on mobile/tablet (`< 992px`).
+   - Listen to `location.pathname` so that any route change or programmatic navigation automatically dismisses the mobile drawer.
+   - Always render the backdrop overlay on mobile to dismiss the drawer when tapping outside.
+
+3. **Touch-Friendly Controls & Mobile Forms**:
+   - Interactive elements (buttons, inputs, selects, tabs) must have adequate touch targets (minimum 36px–44px height).
+   - Modal dialogs must fit small screens: `max-w-md w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto`.
+   - Form action buttons inside modals or footers must stack or wrap gracefully on narrow screens (`flex-col-reverse sm:flex-row`).
+   - Always use `truncate` or `break-words` on long text, badges, or email addresses to avoid blowing out container widths on 375px phone screens.
+
+4. **Data Tables & Card Alternatives on Mobile**:
+   - When presenting tabular data, provide a stacked card view for mobile (`block md:hidden`) or an explicitly scrollable container (`overflow-x-auto scrollbar-thin`).
+   - Metric cards and KPI grids must wrap cleanly into 1 or 2 columns on mobile devices (`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`).
+
+5. **Device & Emulator Verification**:
+   - Verify all layouts in Chrome DevTools Device Mode / Emulator view (e.g. iPhone 14 / Pixel 7 at 375px–412px width).
+   - Ensure horizontal scrolling does NOT occur on the body/main container (`overflow-x-hidden`).

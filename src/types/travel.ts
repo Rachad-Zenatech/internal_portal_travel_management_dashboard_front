@@ -83,6 +83,10 @@ export interface TravelerStipend {
   id: string;
   event_id?: string | null;
   event_title?: string | null;
+  event_location?: string | null;
+  event_start_date?: string | null;
+  event_end_date?: string | null;
+  event_status?: string | null;
   user_id?: string | null;
   recipient_name: string;
   recipient_email: string;

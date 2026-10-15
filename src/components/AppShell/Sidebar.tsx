@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronRight, PanelRight } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { navigation, type NavigationItem } from "./Navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import zenatechLogo from "@/assets/zenatech_logo.png";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/lib/AuthContext";
@@ -12,9 +12,10 @@ import type { User } from "@/types/auth";
 interface SidebarProps {
   isOpen: boolean;
   onToggle: () => void;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
+export default function Sidebar({ isOpen, onToggle, onClose }: SidebarProps) {
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({
     "Travel & Expeditions": true,
     "System & Security": true,
@@ -22,6 +23,26 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
   });
   const location = useLocation();
   const navigate = useNavigate();
+
+  const closeSidebarOnMobile = () => {
+    if (window.innerWidth < 992) {
+      if (onClose) {
+        onClose();
+      } else {
+        onToggle();
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (window.innerWidth < 992 && isOpen) {
+      if (onClose) {
+        onClose();
+      } else {
+        onToggle();
+      }
+    }
+  }, [location.pathname]);
 
   const { hasPermission, hasRole, user } = useAuth();
   const isSuperAdmin = hasRole("SUPER_ADMIN") || user?.is_super_admin;
@@ -103,6 +124,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
         >
           <Link
             to="/"
+            onClick={closeSidebarOnMobile}
             className={`flex items-center flex-1 min-w-0 transition-all duration-300 ease-in-out ${
               isOpen ? "opacity-100" : "opacity-0 w-0 h-0 overflow-hidden"
             }`}
@@ -154,6 +176,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                                 toggleExpand(item.label);
                                 if (item.path) {
                                   navigate(item.path);
+                                  closeSidebarOnMobile();
                                 }
                               }}
                               className={`
@@ -212,6 +235,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                               <Link
                                 key={sub.path}
                                 to={sub.path}
+                                onClick={closeSidebarOnMobile}
                                 className={`
                                   flex items-center justify-between h-7.5 px-2.5 rounded-md text-xs font-medium transition-all duration-200
                                   ${
@@ -246,6 +270,7 @@ export default function Sidebar({ isOpen, onToggle }: SidebarProps) {
                       <TooltipTrigger asChild>
                         <Link
                           to={item.path!}
+                          onClick={closeSidebarOnMobile}
                           className={`
                             flex items-center h-8 tablet:h-8.5 overflow-hidden rounded-md text-xs transition-all duration-300 ease-in-out
                             ${isOpen ? "px-3 justify-start" : "px-0 justify-center"}
