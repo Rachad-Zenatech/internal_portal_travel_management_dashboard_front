@@ -11,6 +11,18 @@ export interface EventAttendee {
   stipend_amount: number;
   special_luggage_assigned?: string | null;
   notes?: string | null;
+  // Enriched plane / flight booking information
+  booking_reference?: string | null;
+  carrier_airline?: string | null;
+  flight_numbers?: string | null;
+  seat_assignment?: string | null;
+  origin_city?: string | null;
+  destination_city?: string | null;
+  departure_date?: string | null;
+  return_date?: string | null;
+  booking_status?: string | null;
+  booking_requires_drone_luggage?: boolean;
+  booking_pelican_case_tag?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -388,8 +400,31 @@ export interface TravelVehicle {
   occupied_seats_count?: number;
   available_seats_count?: number;
   user_assigned_seat?: { position: string; row: number; occupant: string; type: string } | null;
+  departure_status?: "idle" | "loading_up" | "leaving_soon" | "en_route" | "arrived" | "cancelled" | null;
+  departure_location?: string | null;
+  departure_time?: string | null;
+  departure_message?: string | null;
+  departure_updated_at?: string | null;
+  departure_updated_by?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface VehicleDepartureBroadcastPayload {
+  departure_status: "loading_up" | "leaving_soon" | "en_route" | "arrived" | "cancelled";
+  departure_location?: string;
+  departure_time?: string;
+  message?: string;
+  broadcaster_name?: string;
+  broadcaster_email?: string;
+}
+
+export interface VehicleCheckInPayload {
+  passenger_name: string;
+  passenger_email?: string;
+  seat_position?: string;
+  row_number?: number;
+  action?: "check_in" | "check_out";
 }
 
 export interface VehicleSpecLookupResult {
@@ -539,4 +574,29 @@ export interface CurrenciesApiResponse {
   source: string;
 }
 
+export interface VehicleCatalogMake {
+  make: string;
+  default_daily_rate: number;
+  rate_range: string;
+  suggested_rates: number[];
+}
+
+export interface VehicleCatalogModel {
+  make: string;
+  model: string;
+  category: string;
+  vehicle_class: string;
+  seating_capacity: number;
+  cargo_cases_capacity: number;
+  default_daily_rate: number;
+  rate_range: string;
+  is_common_model: boolean;
+  preferred_agency?: string;
+}
+
+export interface VehicleCatalogResponse {
+  makes: VehicleCatalogMake[];
+  models: VehicleCatalogModel[];
+  common_models: string[];
+}
 

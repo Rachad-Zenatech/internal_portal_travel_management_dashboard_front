@@ -37,6 +37,23 @@ export const travelService = {
     apiClient.post<EventAttendee>(`/api/travel/events/${eventId}/attendees`, data),
   removeAttendee: (attendeeId: string) =>
     apiClient.delete(`/api/travel/attendees/${attendeeId}`),
+  updateAttendeeFlight: (
+    attendeeId: string,
+    data: {
+      carrier_airline?: string;
+      flight_numbers?: string;
+      seat_assignment?: string;
+      booking_reference?: string;
+      origin_city?: string;
+      destination_city?: string;
+      flight_details?: string;
+      lodging_details?: string;
+    }
+  ) =>
+    apiClient.put<{ message: string; attendee_id: string }>(
+      `/api/travel/attendees/${attendeeId}/flight`,
+      data
+    ),
 
   // Budgets ("Budgeting")
   getBudgets: () => apiClient.get<TravelBudget[]>("/api/travel/budgets"),
@@ -147,6 +164,8 @@ export const travelService = {
   },
   createVehicle: (payload: Partial<import("@/types/travel").TravelVehicle>) =>
     apiClient.post<import("@/types/travel").TravelVehicle>("/api/travel/vehicles", payload),
+  getVehicleCatalog: () =>
+    apiClient.get<import("@/types/travel").VehicleCatalogResponse>("/api/travel/vehicles/catalog"),
   lookupVehicleSpecs: (params: { make: string; model?: string; year?: number; vin?: string }) => {
     const query = new URLSearchParams();
     query.append("make", params.make);
@@ -157,6 +176,8 @@ export const travelService = {
       `/api/travel/vehicles/lookup-specs?${query.toString()}`
     );
   },
+  getVehicleModels: (make: string) =>
+    apiClient.get<string[]>(`/api/travel/vehicles/models?make=${encodeURIComponent(make)}`),
   assignVehicleSeat: (
     vehicleId: string,
     payload: { passenger_name: string; row_number: number; seat_position: string; action: "assign" | "unassign" }
@@ -165,6 +186,35 @@ export const travelService = {
       `/api/travel/vehicles/${vehicleId}/assign-seat`,
       payload
     ),
+  assignVehicleDriver: (vehicleId: string, assignedDriver: string) =>
+    apiClient.put<{
+      status: string;
+      message: string;
+      vehicle: import("@/types/travel").TravelVehicle;
+    }>(`/api/travel/vehicles/${vehicleId}/assign-driver`, { assigned_driver: assignedDriver }),
+  broadcastVehicleDeparture: (
+    vehicleId: string,
+    payload: import("@/types/travel").VehicleDepartureBroadcastPayload
+  ) =>
+    apiClient.post<{
+      status: string;
+      message: string;
+      departure_status: string;
+      seats_remaining: number;
+      vehicle: import("@/types/travel").TravelVehicle;
+    }>(`/api/travel/vehicles/${vehicleId}/broadcast-departure`, payload),
+  checkInToVehicle: (
+    vehicleId: string,
+    payload: import("@/types/travel").VehicleCheckInPayload
+  ) =>
+    apiClient.post<{
+      status: string;
+      message: string;
+      seat_position?: string;
+      row_number?: number;
+      seats_remaining: number;
+      vehicle: import("@/types/travel").TravelVehicle;
+    }>(`/api/travel/vehicles/${vehicleId}/check-in`, payload),
   deleteVehicle: (vehicleId: string) =>
     apiClient.delete<{ message: string }>(`/api/travel/vehicles/${vehicleId}`),
 

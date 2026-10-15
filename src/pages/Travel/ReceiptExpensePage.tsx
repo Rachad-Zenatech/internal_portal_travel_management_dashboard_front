@@ -2,7 +2,7 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { travelService } from "@/services/travelService";
 import { useAuth } from "@/lib/AuthContext";
-import type { TravelReceipt, TravelEvent, CurrencyOption } from "@/types/travel";
+import type { TravelReceipt, TravelEvent, ReceiptLineItem, CurrencyOption } from "@/types/travel";
 import {
   Receipt,
   UploadCloud,
@@ -96,7 +96,22 @@ export default function ReceiptExpensePage() {
   const [activeTab, setActiveTab] = useState<"list" | "new_expense" | "audit">("list");
   const [mobilePane, setMobilePane] = useState<"receipt" | "form">("receipt");
 
-  // Leadership Check
+  // Safe helper to reliably parse line_items even if serialized as string from PostgreSQL JSONB
+  const getSafeLineItems = (items: any): ReceiptLineItem[] => {
+    if (!items) return [];
+    if (Array.isArray(items)) return items;
+    if (typeof items === "string") {
+      try {
+        const parsed = JSON.parse(items);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  // Leadership role check (CEO, EA, Lead, Super Admin)
   const isActualLeader = Boolean(
     user?.is_super_admin ||
     roles?.some((r) =>
@@ -2044,7 +2059,7 @@ export default function ReceiptExpensePage() {
               )}
 
               {/* Line Items Table */}
-              {selectedReceiptDetail.line_items && selectedReceiptDetail.line_items.length > 0 && (
+              {getSafeLineItems(selectedReceiptDetail.line_items).length > 0 && (
                 <div>
                   <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Itemized Breakdown</h4>
                   <div className="border border-border rounded-lg overflow-hidden text-xs">
@@ -2058,7 +2073,7 @@ export default function ReceiptExpensePage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-border">
-                        {selectedReceiptDetail.line_items.map((li, i) => (
+                        {getSafeLineItems(selectedReceiptDetail.line_items).map((li, i) => (
                           <tr key={i}>
                             <td className="p-2 text-foreground font-medium">{li.description}</td>
                             <td className="p-2 text-center font-mono">{li.quantity}</td>

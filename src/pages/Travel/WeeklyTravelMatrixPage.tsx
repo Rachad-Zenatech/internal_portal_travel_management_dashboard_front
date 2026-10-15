@@ -88,7 +88,7 @@ export default function WeeklyTravelMatrixPage() {
           </div>
           <p className="text-sm text-muted-foreground">
             Centralized coordination of active personnel traveling this week. Separates Executive Assistant VIP bookings
-            (CEO, Sajjad, Jim, Simon, Phil, Linda) from Central Travel Department trade show & drone engineering deployments.
+            (CEO, Rachad, Alvin, Sajjad, Jim, Simon, Phil, Linda) from Central Travel Department trade show & drone engineering deployments.
           </p>
         </div>
 

@@ -108,6 +108,7 @@ export default function AiTravelAssistantPage() {
       const execRes = await travelService.getExecutives();
       if (execRes && execRes.length > 0) {
         setExecutives(execRes);
+        setSelectedExecName(execRes[0].name);
       }
     } catch (err) {
       console.error("Failed to load executives", err);

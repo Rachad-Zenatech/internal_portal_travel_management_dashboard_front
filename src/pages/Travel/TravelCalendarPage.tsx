@@ -59,6 +59,8 @@ export default function TravelCalendarPage() {
     user?.email?.toLowerCase().includes("ceo") ||
     user?.email?.toLowerCase().includes("vanessa") ||
     user?.email?.toLowerCase().includes("admin") ||
+    user?.email?.toLowerCase().includes("rachad") ||
+    user?.email?.toLowerCase().includes("alvin") ||
     user?.job_title?.toLowerCase().includes("ceo") ||
     user?.job_title?.toLowerCase().includes("vp") ||
     user?.job_title?.toLowerCase().includes("lead") ||

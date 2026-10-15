@@ -20,8 +20,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 export default function AirCanadaSyncPage() {
   const [carrier, setCarrier] = useState<string>("Air Canada");
   const [bookingRef, setBookingRef] = useState<string>("AC-908144");
-  const [passengerName, setPassengerName] = useState<string>("CEO (Michael Vance)");
-  const [initiatedBy, setInitiatedBy] = useState<string>("Vanessa (Executive Assistant)");
+  const [executives, setExecutives] = useState<any[]>([]);
+  const [passengerName, setPassengerName] = useState<string>("");
+  const [initiatedBy, setInitiatedBy] = useState<string>("");
   const [targetUrl, setTargetUrl] = useState<string>(
     "https://www.aircanada.com/en-ca/view-booking?ref=AC-908144"
   );
@@ -33,7 +34,23 @@ export default function AirCanadaSyncPage() {
 
   useEffect(() => {
     loadLogs();
+    loadExecutives();
   }, []);
+
+  const loadExecutives = async () => {
+    try {
+      const res = await travelService.getExecutives();
+      if (res && Array.isArray(res) && res.length > 0) {
+        setExecutives(res);
+        setPassengerName(res[0].name);
+        if (res[0].assigned_ea_name) {
+          setInitiatedBy(res[0].assigned_ea_name);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load executives", err);
+    }
+  };
 
   const loadLogs = async () => {
     try {
@@ -168,12 +185,24 @@ export default function AirCanadaSyncPage() {
                 </div>
                 <div>
                   <label className="font-medium text-foreground block mb-1">Passenger Name</label>
-                  <Input
+                  <select
                     value={passengerName}
-                    onChange={(e) => setPassengerName(e.target.value)}
-                    placeholder="CEO (Michael Vance)"
-                    className="h-9 text-xs"
-                  />
+                    onChange={(e) => {
+                      setPassengerName(e.target.value);
+                      const matched = executives.find((x) => x.name === e.target.value);
+                      if (matched?.assigned_ea_name) setInitiatedBy(matched.assigned_ea_name);
+                    }}
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 text-xs"
+                  >
+                    {executives.map((ex) => (
+                      <option key={ex.id} value={ex.name}>
+                        {ex.name} — {ex.title}
+                      </option>
+                    ))}
+                    {executives.length === 0 && (
+                      <option value="">Loading staff profiles from table...</option>
+                    )}
+                  </select>
                 </div>
               </div>
 
