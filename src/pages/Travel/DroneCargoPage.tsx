@@ -12,6 +12,7 @@ import {
   PhoneCall,
   FileCheck2,
   Barcode,
+  Calendar,
 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +44,11 @@ export default function DroneCargoPage() {
     queryFn: travelService.getSpecialLuggage,
   });
 
+  const { data: eventsList = [] } = useQuery({
+    queryKey: ["travelEvents"],
+    queryFn: travelService.getEvents,
+  });
+
   const { data: gearList = [], isLoading: isLoadingGear } = useQuery({
     queryKey: ["droneGear"],
     queryFn: travelService.getDroneGear,
@@ -53,8 +59,16 @@ export default function DroneCargoPage() {
     queryFn: travelService.getSpecialCoverages,
   });
 
-  // Luggage Form
+  // Luggage Filter & Form
+  const [filterEventId, setFilterEventId] = useState("all");
+  const [selectedEventId, setSelectedEventId] = useState("");
   const [caseCode, setCaseCode] = useState("");
+
+  const displayedLuggageList = filterEventId === "all"
+    ? luggageList
+    : filterEventId === "unassigned"
+    ? luggageList.filter((l) => !l.event_id)
+    : luggageList.filter((l) => l.event_id === filterEventId);
   const [caseName, setCaseName] = useState("");
   const [luggageClass, setLuggageClass] = useState("oversized_hard_case");
   const [airline, setAirline] = useState("Delta Air Lines");
@@ -151,6 +165,7 @@ export default function DroneCargoPage() {
   });
 
   const resetLuggageForm = () => {
+    setSelectedEventId("");
     setCaseCode("");
     setCaseName("");
     setLuggageClass("oversized_hard_case");
@@ -198,6 +213,7 @@ export default function DroneCargoPage() {
   const handleCreateLuggage = (e: React.FormEvent) => {
     e.preventDefault();
     createLuggageMutation.mutate({
+      event_id: selectedEventId || null,
       case_code: caseCode,
       case_name: caseName,
       luggage_classification: luggageClass,
@@ -347,6 +363,40 @@ export default function DroneCargoPage() {
             </Card>
           </div>
 
+          {/* Event Filter & Counts */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 bg-card border border-border rounded-lg">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Calendar className="w-4 h-4 text-primary" />
+              <span className="text-xs font-semibold text-foreground">Filter by Event:</span>
+              <select
+                value={filterEventId}
+                onChange={(e) => setFilterEventId(e.target.value)}
+                className="h-8 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs"
+              >
+                <option value="all">All Events ({luggageList.length})</option>
+                <option value="unassigned">Unassigned ({luggageList.filter((l) => !l.event_id).length})</option>
+                {eventsList.map((ev) => {
+                  const cnt = luggageList.filter((l) => l.event_id === ev.id).length;
+                  return (
+                    <option key={ev.id} value={ev.id}>
+                      {ev.title} ({cnt})
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            {filterEventId !== "all" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setFilterEventId("all")}
+                className="text-xs h-7 text-muted-foreground hover:text-foreground"
+              >
+                Reset Filter
+              </Button>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {isLoadingLuggage ? (
               <div className="col-span-full p-8 text-center text-sm text-muted-foreground">
@@ -356,8 +406,12 @@ export default function DroneCargoPage() {
               <div className="col-span-full p-8 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
                 No luggage cases registered. Click "New Pelican / Luggage Case" to add one.
               </div>
+            ) : displayedLuggageList.length === 0 ? (
+              <div className="col-span-full p-8 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
+                No cases found for the selected event filter.
+              </div>
             ) : (
-              luggageList.map((caseItem) => (
+              displayedLuggageList.map((caseItem) => (
                 <Card key={caseItem.id} className="border-border relative flex flex-col justify-between">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
@@ -381,6 +435,17 @@ export default function DroneCargoPage() {
                     <CardDescription className="text-xs">
                       {caseItem.carrier_airline} • {caseItem.dimensions_cm} cm
                     </CardDescription>
+                    {caseItem.event_title ? (
+                      <div className="flex items-center gap-1.5 text-xs text-primary font-medium mt-1.5 bg-primary/10 px-2 py-1 rounded border border-primary/20">
+                        <Calendar className="w-3.5 h-3.5 shrink-0" />
+                        <span className="truncate">{caseItem.event_title}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground mt-1.5 bg-muted/40 px-2 py-0.5 rounded">
+                        <Calendar className="w-3 h-3 shrink-0 opacity-40" />
+                        <span className="italic">Unassigned to Event</span>
+                      </div>
+                    )}
                   </CardHeader>
 
                   <CardContent className="text-xs space-y-2 pt-0 pb-3">
@@ -628,6 +693,25 @@ export default function DroneCargoPage() {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateLuggage} className="space-y-4">
+            <div>
+              <Label className="text-xs font-semibold">Assign to Travel Event</Label>
+              <select
+                value={selectedEventId}
+                onChange={(e) => setSelectedEventId(e.target.value)}
+                className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-xs shadow-xs mt-1"
+              >
+                <option value="">-- No Event Assigned (General Freight) --</option>
+                {eventsList.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.title} ({ev.location} • {ev.start_date})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Assigns this Pelican luggage case directly to an official travel event.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs">Case Code / ID</Label>
