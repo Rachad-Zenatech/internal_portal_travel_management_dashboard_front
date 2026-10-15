@@ -306,13 +306,13 @@ export default function AirCanadaSyncPage() {
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Passenger:</span>
                     <strong className="text-foreground text-xs">
-                      {syncedBooking ? syncedBooking.traveler_name : "CEO (Michael Vance)"}
+                      {syncedBooking ? syncedBooking.traveler_name : (passengerName || "Traveler")}
                     </strong>
                   </div>
                   <div>
                     <span className="text-muted-foreground block text-[11px]">Booked By:</span>
                     <strong className="text-foreground text-xs">
-                      {syncedBooking ? syncedBooking.booked_by_name : "Vanessa (Executive Assistant)"}
+                      {syncedBooking ? syncedBooking.booked_by_name : (initiatedBy || "Travel Coordinator")}
                     </strong>
                   </div>
                   <div>

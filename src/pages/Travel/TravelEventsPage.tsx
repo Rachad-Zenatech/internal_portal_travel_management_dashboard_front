@@ -379,7 +379,7 @@ export default function TravelEventsPage() {
       excess_baggage_fee: Number(lugExcessFee),
       iata_lipo_compliant: Boolean(lugIataLipoCompliant),
       carnet_customs_declaration: lugCarnet,
-      custodian_name: lugCustodianName || (eventDetails?.event?.coordinator_name || "Alex Rivera"),
+      custodian_name: lugCustodianName || eventDetails?.event?.coordinator_name || user?.full_name || "Unassigned",
       custodian_email: lugCustodianEmail,
       status: lugStatus,
       handling_instructions: lugHandlingInstructions,
@@ -1829,7 +1829,7 @@ export default function TravelEventsPage() {
                   required
                   value={attName}
                   onChange={(e) => setAttName(e.target.value)}
-                  placeholder="e.g. Alex Rivera"
+                  placeholder="e.g. Jane Doe"
                   className="text-xs"
                 />
               </div>
@@ -1840,7 +1840,7 @@ export default function TravelEventsPage() {
                   required
                   value={attEmail}
                   onChange={(e) => setAttEmail(e.target.value)}
-                  placeholder="e.g. alex.rivera@zenatech.com"
+                  placeholder="e.g. employee@zenatech.com"
                   className="text-xs"
                 />
               </div>

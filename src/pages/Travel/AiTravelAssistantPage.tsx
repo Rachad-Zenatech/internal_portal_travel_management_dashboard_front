@@ -23,8 +23,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 
 export default function AiTravelAssistantPage() {
   const [executives, setExecutives] = useState<ExecutiveProfile[]>([]);
-  const [selectedExecName, setSelectedExecName] = useState<string>("CEO (Michael Vance)");
-  const [assistantName, setAssistantName] = useState<string>("Vanessa");
+  const [selectedExecName, setSelectedExecName] = useState<string>("");
+  const [assistantName, setAssistantName] = useState<string>("Travel Coordinator");
   const [destination, setDestination] = useState<string>("Los Angeles (LAX)");
   const [budgetCap, setBudgetCap] = useState<number>(5000);
   const [inputText, setInputText] = useState<string>("");
@@ -138,27 +138,27 @@ export default function AiTravelAssistantPage() {
 
   const quickPrompts = [
     {
-      title: "CEO to LAX (Air Canada Signature)",
-      text: "Book CEO's trip to LAX on Air Canada Signature Class pod with 4 nights at Ritz-Carlton and Hertz Escalade.",
-      exec: "CEO (Michael Vance)",
+      title: "Business Direct Flight",
+      text: "Book business class direct flight with 4 nights luxury lodging and full-size SUV rental.",
+      exec: executives[0]?.name || "",
       dest: "Los Angeles (LAX)",
     },
     {
-      title: "Sajjad to Chicago (Drone Kit Support)",
-      text: "Plan Sajjad's trip to Chicago for sensor flight tests with priority luggage for drone payload cases.",
-      exec: "Sajjad",
+      title: "Field Flight Testing Support",
+      text: "Plan trip for sensor flight tests with priority luggage for drone payload cases.",
+      exec: executives[1]?.name || executives[0]?.name || "",
       dest: "Chicago (ORD)",
     },
     {
-      title: "Jim to Dallas (AUVSI Trade Show)",
-      text: "Prepare Jim's travel to Dallas for trade show booth coordination, keeping total spend under $3,500.",
-      exec: "Jim",
+      title: "Conference & Expo Coordination",
+      text: "Prepare travel to trade show booth coordination, keeping total spend under $3,500.",
+      exec: executives[2]?.name || executives[0]?.name || "",
       dest: "Dallas (DFW)",
     },
     {
       title: "Check Schedule Conflicts",
-      text: "Review CEO schedule conflicts next week and find earliest morning direct return flight.",
-      exec: "CEO (Michael Vance)",
+      text: "Review schedule conflicts next week and find earliest morning direct return flight.",
+      exec: executives[0]?.name || "",
       dest: "Vancouver (YVR)",
     },
   ];

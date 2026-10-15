@@ -239,12 +239,14 @@ export default function ReceiptExpensePage() {
     let sampleText = "";
     let sampleFilename = "";
 
+    const currentUserName = user?.full_name || "Traveler";
+
     if (sampleType === "delta") {
       sampleFilename = "delta_e_ticket_slc_las.txt";
       sampleText = `DELTA AIR LINES PASSENGER RECEIPT
 TICKET: 006-8812904128
 DATE: 2026-10-14
-PASSENGER: Alex Rivera
+PASSENGER: ${currentUserName}
 FLIGHT DL 1482: SLC -> LAS
 BASE FARE: $610.00
 SECURITY & CARRIER TAXES: $52.40
@@ -254,7 +256,7 @@ PAYMENT: AMEX ****4012`;
     } else if (sampleType === "bellagio") {
       sampleFilename = "bellagio_folio_oct14.txt";
       sampleText = `BELLAGIO RESORT & CASINO
-ROOM 2408 - ALEX RIVERA
+ROOM 2408 - ${currentUserName.toUpperCase()}
 DATE: 2026-10-14
 NIGHTLY CHARGE: $340.00
 RESORT FEE: $45.00
@@ -990,8 +992,8 @@ PAYMENT: CORPORATE AMEX`;
               onClick={() =>
                 saveReceiptMutation.mutate({
                   event_id: formEventId || null,
-                  user_email: user?.email || "alex.rivera@zenatech.com",
-                  user_name: user?.full_name || "Alex Rivera",
+                  user_email: user?.email || "",
+                  user_name: user?.full_name || user?.email || "Team Member",
                   merchant_name: formMerchant,
                   transaction_date: formDate,
                   total_amount: formTotal,
