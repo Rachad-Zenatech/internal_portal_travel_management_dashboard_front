@@ -242,6 +242,31 @@ export default function ReceiptExpensePage() {
     reimbursed_amount: 0,
   };
 
+  // Query total receipts count for top tab badge
+  const { data: allReceiptsCountData } = useQuery({
+    queryKey: ["travelReceiptsTotalCount", selectedEventId],
+    queryFn: () =>
+      travelService.getReceipts({
+        eventId: selectedEventId,
+        isAdminOverride: true,
+      }),
+    staleTime: 30000,
+  });
+
+  const allCount =
+    allReceiptsCountData?.stats?.total_receipts ??
+    allReceiptsCountData?.receipts?.length ??
+    (perspectiveMode === "leadership" ? receiptsList.length : 0);
+
+  const myCount = useMemo(() => {
+    if (perspectiveMode === "attendee") {
+      return receiptsList.length;
+    }
+    const currentEmail = (user?.email || "alex.rivera@zenatech.com").toLowerCase();
+    const sourceList = allReceiptsCountData?.receipts || receiptsList;
+    return sourceList.filter((r) => (r.user_email || "").toLowerCase() === currentEmail).length;
+  }, [perspectiveMode, receiptsList, allReceiptsCountData?.receipts, user?.email]);
+
   // Auto-set event ID
   useEffect(() => {
     if (eventsList.length > 0 && !formEventId) {
@@ -670,28 +695,32 @@ export default function ReceiptExpensePage() {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex bg-muted/60 p-1 rounded-xl border border-border">
             <button
-              onClick={() => setActiveTab("list")}
+              type="button"
+              onClick={() => {
+                setPerspectiveMode("leadership");
+                if (activeTab !== "list") setActiveTab("list");
+              }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "list"
+                activeTab === "list" && perspectiveMode === "leadership"
                   ? "bg-card text-foreground shadow-xs font-bold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              All Expenses ({receiptsList.length})
+              All Expenses {allCount !== undefined && allCount > 0 ? `(${allCount})` : `(${receiptsList.length})`}
             </button>
             <button
+              type="button"
               onClick={() => {
-                resetForm();
-                setActiveTab("new_expense");
+                setPerspectiveMode("attendee");
+                if (activeTab !== "list") setActiveTab("list");
               }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                activeTab === "new_expense"
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                activeTab === "list" && perspectiveMode === "attendee"
                   ? "bg-card text-foreground shadow-xs font-bold"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <Plus className="w-3.5 h-3.5 text-primary" />
-              <span>{editingReceiptId ? "Edit Expense" : "New Expense"}</span>
+              My Expenses {myCount !== undefined && myCount > 0 ? `(${myCount})` : ""}
             </button>
           </div>
 
@@ -1751,30 +1780,6 @@ export default function ReceiptExpensePage() {
                 <option value="reimbursed">Reimbursed</option>
                 <option value="draft">Draft</option>
               </select>
-
-              {/* Leadership Perspective Switcher */}
-              {isActualLeader && (
-                <div className="flex bg-muted/60 p-0.5 rounded-lg border border-border text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setPerspectiveMode("leadership")}
-                    className={`px-2.5 py-1 rounded font-semibold transition-all ${
-                      perspectiveMode === "leadership" ? "bg-card text-foreground shadow-2xs" : "text-muted-foreground"
-                    }`}
-                  >
-                    Leadership
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setPerspectiveMode("attendee")}
-                    className={`px-2.5 py-1 rounded font-semibold transition-all ${
-                      perspectiveMode === "attendee" ? "bg-card text-foreground shadow-2xs" : "text-muted-foreground"
-                    }`}
-                  >
-                    My Expenses
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
