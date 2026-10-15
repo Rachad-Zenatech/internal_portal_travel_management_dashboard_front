@@ -64,8 +64,8 @@ export default function AiTravelAssistantPage() {
 
   // Executive & Chat State
   const [executives, setExecutives] = useState<ExecutiveProfile[]>([]);
-  const [selectedExecName, setSelectedExecName] = useState<string>("CEO (Michael Vance)");
-  const [assistantName, setAssistantName] = useState<string>("Vanessa");
+  const [selectedExecName, setSelectedExecName] = useState<string>("");
+  const [assistantName, setAssistantName] = useState<string>("Travel Coordinator");
   const [destination, setDestination] = useState<string>("Los Angeles (LAX)");
   const [budgetCap, setBudgetCap] = useState<number>(5000);
   const [inputText, setInputText] = useState<string>("");

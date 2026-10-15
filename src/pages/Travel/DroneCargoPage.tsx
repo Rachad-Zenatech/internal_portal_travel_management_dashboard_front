@@ -716,7 +716,7 @@ export default function DroneCargoPage() {
                   required
                   value={custodian}
                   onChange={(e) => setCustodian(e.target.value)}
-                  placeholder="Alex Rivera"
+                  placeholder="e.g. Equipment Custodian"
                   className="text-xs"
                 />
               </div>
@@ -830,7 +830,7 @@ export default function DroneCargoPage() {
                 <Input
                   value={assignedPilot}
                   onChange={(e) => setAssignedPilot(e.target.value)}
-                  placeholder="Alex Rivera"
+                  placeholder="e.g. Lead Pilot / Handler"
                   className="text-xs"
                 />
               </div>

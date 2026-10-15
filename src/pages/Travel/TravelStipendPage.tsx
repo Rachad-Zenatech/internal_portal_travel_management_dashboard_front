@@ -334,7 +334,7 @@ export default function TravelStipendPage() {
                   required
                   value={recipientName}
                   onChange={(e) => setRecipientName(e.target.value)}
-                  placeholder="e.g. Alex Rivera"
+                  placeholder="e.g. Jane Doe"
                   className="text-xs"
                 />
               </div>
@@ -345,7 +345,7 @@ export default function TravelStipendPage() {
                   required
                   value={recipientEmail}
                   onChange={(e) => setRecipientEmail(e.target.value)}
-                  placeholder="e.g. alex.rivera@zenatech.com"
+                  placeholder="e.g. name@company.com"
                   className="text-xs"
                 />
               </div>

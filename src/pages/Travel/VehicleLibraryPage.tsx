@@ -98,10 +98,10 @@ export default function VehicleLibraryPage() {
   // Query Vehicles (filtered by trip and user role/email)
   const isAttendeeView = perspectiveMode === "attendee";
   const effectiveEmail = isAttendeeView
-    ? user?.email || "alex.rivera@zenatech.com"
+    ? user?.email || undefined
     : undefined;
   const effectiveName = isAttendeeView
-    ? user?.full_name || "Alex Rivera"
+    ? user?.full_name || undefined
     : undefined;
 
   const { data: vehicles = [], isLoading } = useQuery({

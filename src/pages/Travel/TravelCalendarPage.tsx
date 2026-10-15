@@ -443,7 +443,7 @@ export default function TravelCalendarPage() {
                 </Badge>
               </div>
               <p className="text-xs font-semibold text-foreground truncate mt-0.5">
-                {user?.full_name || "Alex Rivera"} ({user?.email || "alex.rivera@zenatech.com"})
+                {user?.full_name || user?.email || "Authenticated Traveler"} {user?.email && user?.full_name ? `(${user.email})` : ""}
               </p>
             </div>
           </CardContent>
