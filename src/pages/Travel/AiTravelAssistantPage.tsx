@@ -3,25 +3,66 @@ import {
   Sparkles,
   Send,
   Plane,
-  Building2,
-  Car,
-  ShieldCheck,
-  DollarSign,
-  CheckCircle2,
   User,
-  Crown,
-  Luggage,
-  ArrowRight,
   Loader2,
+  Bot,
+  Bookmark,
+  Trash2,
+  RefreshCw,
+  DollarSign,
+  ShieldCheck,
+  ArrowRightLeft,
+  Users,
+  Search,
 } from "lucide-react";
 import { travelService } from "@/services/travelService";
-import type { AiItineraryOption, ExecutiveProfile } from "@/types/travel";
+import { flightService } from "@/services/flightService";
+import type { ExecutiveProfile } from "@/types/travel";
+import type {
+  FlightBookingSession,
+  FlightSearchResultItem,
+  SavedFlightOption,
+  Airport,
+} from "@/types/flight";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { FlightCard } from "@/components/Flight/FlightCard";
+import { AirportCombobox } from "@/components/Flight/AirportCombobox";
+import { BookingTrackerModal } from "@/components/Flight/BookingTrackerModal";
+import { useAuth } from "@/lib/AuthContext";
+import { toast } from "sonner";
 
 export default function AiTravelAssistantPage() {
+  const { user } = useAuth();
+  // Navigation Tabs: "chat" | "explorer" | "saved" | "sessions"
+  const [activeHubTab, setActiveHubTab] = useState<"chat" | "explorer" | "saved" | "sessions">("chat");
+
+  // Flight Explorer State
+  const [searchOrigin, setSearchOrigin] = useState<string>("YYZ");
+  const [searchDestination, setSearchDestination] = useState<string>("LAS");
+  const [searchTripType, setSearchTripType] = useState<"round_trip" | "one_way">("round_trip");
+  const [searchDepartureDate, setSearchDepartureDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    return d.toISOString().split("T")[0];
+  });
+  const [searchReturnDate, setSearchReturnDate] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 11);
+    return d.toISOString().split("T")[0];
+  });
+  const [searchAdults, setSearchAdults] = useState<number>(1);
+  const [searchCabin, setSearchCabin] = useState<"economy" | "premium_economy" | "business" | "first">("economy");
+  const [searchCurrency, setSearchCurrency] = useState<string>("CAD");
+  const [searchMaxStops, setSearchMaxStops] = useState<number | undefined>(undefined);
+  const [searchSortBy, setSearchSortBy] = useState<"recommended" | "lowest_price" | "shortest_duration" | "departure_time">("recommended");
+  const [searchResults, setSearchResults] = useState<FlightSearchResultItem[]>([]);
+  const [isSearchingFlights, setIsSearchingFlights] = useState<boolean>(false);
+  const [hasSearchedFlights, setHasSearchedFlights] = useState<boolean>(false);
+
+  // Executive & Chat State
   const [executives, setExecutives] = useState<ExecutiveProfile[]>([]);
   const [selectedExecName, setSelectedExecName] = useState<string>("");
   const [assistantName, setAssistantName] = useState<string>("Travel Coordinator");
@@ -41,19 +82,26 @@ export default function AiTravelAssistantPage() {
     }>
   >([]);
 
-  const [activeOptions, setActiveOptions] = useState<AiItineraryOption[]>([]);
-  const [bookingInProgress, setBookingInProgress] = useState<string | null>(null);
-  const [lastBookingResult, setLastBookingResult] = useState<any | null>(null);
+  // Booking Modal & Saved Options
+  const [activeSession, setActiveSession] = useState<FlightBookingSession | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [savedOptionIds, setSavedOptionIds] = useState<Set<string>>(new Set());
+  const [savedOptions, setSavedOptions] = useState<SavedFlightOption[]>([]);
+  const [recentSessions, setRecentSessions] = useState<FlightBookingSession[]>([]);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadInitialData();
+    loadSavedOptions();
+    loadRecentSessions();
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [chatMessages, activeOptions]);
+    if (activeHubTab === "chat") {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages, activeHubTab]);
 
   const loadInitialData = async () => {
     try {
@@ -62,26 +110,36 @@ export default function AiTravelAssistantPage() {
         setExecutives(execRes);
         setSelectedExecName(execRes[0].name);
       }
-      // Load recent AI conversations
-      const convRes = await travelService.getAiConversations();
-      if (convRes && convRes.length > 0) {
-        const latest = convRes[0];
-        setConversationId(latest.id);
-        if (latest.messages && latest.messages.length > 0) {
-          setChatMessages(latest.messages);
-          const lastBot = [...latest.messages].reverse().find((m: any) => m.sender === "bot" && m.itinerary_payload);
-          if (lastBot && lastBot.itinerary_payload?.options) {
-            setActiveOptions(lastBot.itinerary_payload.options);
-          }
-        }
-      }
     } catch (err) {
-      console.error("Failed to load initial data", err);
+      console.error("Failed to load executives", err);
     }
   };
 
-  const handleSendPrompt = async (textToSend?: string) => {
-    const text = textToSend || inputText;
+  const loadSavedOptions = async () => {
+    try {
+      const res = await flightService.getSavedOptions();
+      if (res) {
+        setSavedOptions(res);
+        setSavedOptionIds(new Set(res.map((o) => o.id || o.itinerary_payload?.option_id)));
+      }
+    } catch (e) {
+      console.error("Failed to load saved options", e);
+    }
+  };
+
+  const loadRecentSessions = async () => {
+    try {
+      const res = await flightService.getRecentSessions();
+      if (res) {
+        setRecentSessions(res);
+      }
+    } catch (e) {
+      console.error("Failed to load recent sessions", e);
+    }
+  };
+
+  const handleSendPrompt = async (promptOverride?: string) => {
+    const text = promptOverride || inputText;
     if (!text.trim() || loading) return;
 
     const userMsg = {
@@ -107,475 +165,909 @@ export default function AiTravelAssistantPage() {
       if (res) {
         setConversationId(res.conversation_id);
         setChatMessages(res.messages || []);
-        setActiveOptions(res.itinerary_options || []);
       }
     } catch (err) {
       console.error("Error during AI chat", err);
+      toast.error("Failed to communicate with AI Travel Assistant");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleAutoBook = async (option: AiItineraryOption) => {
-    setBookingInProgress(option.option_id);
+  const handleClearChat = () => {
+    setChatMessages([]);
+    setConversationId(null);
+    toast.success("Chat conversation cleared.");
+  };
+
+  const handleContinueToBooking = async (flight: FlightSearchResultItem) => {
     try {
       const targetExec = executives.find((e) => e.name === selectedExecName);
-      const res = await travelService.autoBookAiItinerary({
-        conversation_id: conversationId || undefined,
-        traveler_name: selectedExecName,
-        traveler_email: targetExec?.email || "ceo@zenatech.com",
-        booked_by_name: assistantName,
-        itinerary_payload: option,
+
+      const session = await flightService.createBookingSession({
+        provider_name: flight.airline_name || "Airline Portal",
+        observed_price: flight.price,
+        currency: flight.currency,
+        booking_url: flight.booking_url || `https://www.google.com/travel/flights`,
+        itinerary_summary: {
+          flight_option_id: flight.option_id,
+          target_executive_name: selectedExecName,
+          booked_by_name: assistantName,
+          booked_by_email: user?.email || "assistant@zenatech.com",
+          traveler_name: selectedExecName,
+          traveler_email: targetExec?.email || "executive@zenatech.com",
+          flight_details_snapshot: flight,
+        },
       });
 
-      setLastBookingResult(res);
-    } catch (err) {
-      console.error("Auto book failed", err);
-    } finally {
-      setBookingInProgress(null);
+      if (session) {
+        setActiveSession(session);
+        setIsModalOpen(true);
+        loadRecentSessions();
+
+        const bookingUrl = flight.booking_url || `https://www.google.com/travel/flights`;
+        const newTab = window.open(bookingUrl, "_blank");
+
+        newTab?.postMessage(
+          {
+            type: "ZENATECH_SESSION_ATTACH",
+            payload: {
+              sessionId: session.id,
+              traveler: selectedExecName,
+              provider: session.provider_name,
+              apiUrl: window.location.origin.includes("localhost")
+                ? "http://localhost:8008"
+                : window.location.origin,
+            },
+          },
+          "*"
+        );
+
+        await flightService.sendSessionEvent(session.id, {
+          event_type: "BOOKING_LINK_OPENED",
+          source: "web_app",
+          raw_payload: { action: "booking_url_opened_in_new_tab" },
+        });
+      }
+    } catch (e) {
+      console.error("Failed to initiate booking session", e);
     }
   };
 
-  const quickPrompts = [
-    {
-      title: "Business Direct Flight",
-      text: "Book business class direct flight with 4 nights luxury lodging and full-size SUV rental.",
-      exec: executives[0]?.name || "",
-      dest: "Los Angeles (LAX)",
-    },
-    {
-      title: "Field Flight Testing Support",
-      text: "Plan trip for sensor flight tests with priority luggage for drone payload cases.",
-      exec: executives[1]?.name || executives[0]?.name || "",
-      dest: "Chicago (ORD)",
-    },
-    {
-      title: "Conference & Expo Coordination",
-      text: "Prepare travel to trade show booth coordination, keeping total spend under $3,500.",
-      exec: executives[2]?.name || executives[0]?.name || "",
-      dest: "Dallas (DFW)",
-    },
-    {
-      title: "Check Schedule Conflicts",
-      text: "Review schedule conflicts next week and find earliest morning direct return flight.",
-      exec: executives[0]?.name || "",
-      dest: "Vancouver (YVR)",
-    },
-  ];
+  const handleSaveFlight = async (flight: FlightSearchResultItem) => {
+    try {
+      await flightService.saveOption({
+        trip_type: flight.trip_type,
+        origin_airport: flight.outbound.origin_airport,
+        destination_airport: flight.outbound.destination_airport,
+        departure_date: flight.outbound.departure_time.split(" ")[0],
+        airline_name: flight.airline_name,
+        flight_numbers: flight.flight_numbers,
+        displayed_price: flight.price,
+        currency: flight.currency,
+        source_url: flight.booking_url,
+        itinerary_payload: flight,
+      });
+      setSavedOptionIds((prev) => new Set(prev).add(flight.option_id));
+      loadSavedOptions();
+      toast.success(`Bookmarked ${flight.airline_name} flight`);
+    } catch (e) {
+      console.error("Failed to save flight", e);
+    }
+  };
+
+  const handleSwapAirports = () => {
+    const temp = searchOrigin;
+    setSearchOrigin(searchDestination);
+    setSearchDestination(temp);
+  };
+
+  const handleExecuteFlightSearch = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!searchOrigin || !searchDestination || !searchDepartureDate) {
+      toast.error("Please specify origin airport, destination airport, and departure date.");
+      return;
+    }
+    setIsSearchingFlights(true);
+    setHasSearchedFlights(true);
+    try {
+      const response = await flightService.searchFlights({
+        trip_type: searchTripType,
+        origin_airport: searchOrigin,
+        destination_airport: searchDestination,
+        departure_date: searchDepartureDate,
+        return_date: searchTripType === "round_trip" ? searchReturnDate : undefined,
+        adults: searchAdults,
+        children: 0,
+        infants: 0,
+        cabin: searchCabin,
+        currency: searchCurrency,
+        search_market: "CA",
+        max_stops: searchMaxStops,
+        sort_by: searchSortBy,
+      });
+
+      if (response && response.results) {
+        setSearchResults(response.results);
+        if (response.results.length === 0) {
+          toast.info("No flights found matching your search criteria.");
+        } else {
+          toast.success(`Found ${response.results.length} live flight options!`);
+        }
+      }
+    } catch (err: any) {
+      console.error("Flight search failed", err);
+      toast.error("Failed to query live flight prices.");
+    } finally {
+      setIsSearchingFlights(false);
+    }
+  };
+
+  const handleQuickFlightPreset = (orig: string, dest: string, name: string) => {
+    setSearchOrigin(orig);
+    setSearchDestination(dest);
+    toast.info(`Updated search route to ${orig} → ${dest} (${name})`);
+  };
+
+  const handleAskBotAboutFlight = (flight: FlightSearchResultItem) => {
+    setActiveHubTab("chat");
+    const prompt = `Analyze this ${flight.airline_name} flight (${flight.flight_numbers}) from ${flight.outbound.origin_airport} to ${flight.outbound.destination_airport} at $${flight.price} ${flight.currency} for ${selectedExecName}. Check corporate travel policy and suggest booking recommendations.`;
+    handleSendPrompt(prompt);
+  };
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
       {/* Top Banner / Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="p-2 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
-              <Sparkles className="w-6 h-6 animate-pulse" />
+          <div className="flex items-center gap-2.5 mb-1">
+            <span className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+              <Sparkles className="w-5 h-5 animate-pulse" />
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              AI Executive Travel Planner & Dispatch
+              AI Travel Assistant
             </h1>
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1.5 py-0.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse inline-block" />
+              Live Google Flights Engine Active
+            </Badge>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Centralized intelligent booking engine for Executive Assistants (Vanessa, Pat). Enforces CEO preferences,
-            loyalty tiers, pre-trip budget caps, and calendar conflict detection.
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            Intelligent booking engine for Executive Assistants. Queries live airline fares, checks corporate policy, and embeds interactive flight options directly inside the conversation.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Badge variant="outline" className="px-3 py-1 bg-background text-xs border-indigo-200 dark:border-indigo-800 flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5 text-indigo-500" />
-            <span>Active Assistant:</span>
-            <strong className="text-foreground">{assistantName}</strong>
-          </Badge>
-          <div className="flex bg-muted/60 p-0.5 rounded-lg border border-border text-xs">
-            <button
-              onClick={() => setAssistantName("Vanessa")}
-              className={`px-2.5 py-1 rounded-md font-medium transition-all ${
-                assistantName === "Vanessa" ? "bg-card shadow-xs text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Vanessa (CEO / Sajjad)
-            </button>
-            <button
-              onClick={() => setAssistantName("Pat")}
-              className={`px-2.5 py-1 rounded-md font-medium transition-all ${
-                assistantName === "Pat" ? "bg-card shadow-xs text-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Pat (Jim / Ops / Central)
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Control Strip: Executive, Destination, Budget Cap */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-card border border-border shadow-xs">
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-            Traveling Executive
-          </label>
-          <select
-            value={selectedExecName}
-            onChange={(e) => setSelectedExecName(e.target.value)}
-            className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+        {/* View Switcher Tabs */}
+        <div className="flex bg-muted/60 p-1 rounded-xl border border-border shrink-0 self-start">
+          <button
+            onClick={() => setActiveHubTab("chat")}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeHubTab === "chat"
+                ? "bg-card text-foreground shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
           >
-            {executives.map((ex) => (
-              <option key={ex.id} value={ex.name}>
-                {ex.name} — {ex.title}
-              </option>
-            ))}
-            {executives.length === 0 && (
-              <option value="" disabled>No executives found in database table</option>
-            )}
-          </select>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-            Destination & Airport
-          </label>
-          <Input
-            value={destination}
-            onChange={(e) => setDestination(e.target.value)}
-            placeholder="e.g. Los Angeles (LAX)"
-            className="h-9 text-sm"
-          />
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-            Pre-Trip Budget Cap (USD)
-          </label>
-          <div className="relative">
-            <DollarSign className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
-            <Input
-              type="number"
-              value={budgetCap}
-              onChange={(e) => setBudgetCap(Number(e.target.value))}
-              className="h-9 pl-8 text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-col justify-end">
-          <div className="text-xs text-muted-foreground flex items-center gap-1.5 pb-1">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Air Canada & Carrier APIs Linked</span>
-          </div>
-          <div className="text-xs font-medium text-emerald-600 dark:text-emerald-400">
-            Live Corporate Rates & Priority Status Active
-          </div>
+            <Bot className="w-3.5 h-3.5 text-indigo-500" />
+            <span>AI Travel Bot</span>
+          </button>
+          <button
+            onClick={() => setActiveHubTab("explorer")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeHubTab === "explorer"
+                ? "bg-card text-foreground shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Plane className="w-3.5 h-3.5 text-blue-500" />
+            <span>Flight Explorer</span>
+          </button>
+          <button
+            onClick={() => setActiveHubTab("saved")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeHubTab === "saved"
+                ? "bg-card text-foreground shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Bookmark className="w-3.5 h-3.5" />
+            <span>Saved ({savedOptions.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveHubTab("sessions")}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+              activeHubTab === "sessions"
+                ? "bg-card text-foreground shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <span>Audit & Sessions ({recentSessions.length})</span>
+          </button>
         </div>
       </div>
 
-      {/* Quick Prompt Chips */}
-      <div>
-        <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-          <span>One-Click EA Assistant Prompts</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-          {quickPrompts.map((qp, idx) => (
-            <button
-              key={idx}
-              onClick={() => {
-                setSelectedExecName(qp.exec);
-                setDestination(qp.dest);
-                handleSendPrompt(qp.text);
-              }}
-              className="text-left p-3 rounded-lg border border-border bg-card/60 hover:bg-accent/40 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all text-xs group"
-            >
-              <div className="font-semibold text-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400 mb-1 flex items-center justify-between">
-                <span>{qp.title}</span>
-                <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </div>
-              <p className="text-muted-foreground line-clamp-2">{qp.text}</p>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Main Chat and Results Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left Column: Chat History */}
-        <div className="lg:col-span-6 flex flex-col h-[640px] bg-card rounded-xl border border-border shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs font-semibold text-foreground">
-                Assistant Chat Session ({assistantName} ↔ Zenatech Travel Bot)
-              </span>
+      {/* ===================== TAB 1: AI TRAVEL BOT & CHAT ===================== */}
+      {activeHubTab === "chat" && (
+        <div className="space-y-6">
+          {/* Executive & Travel Control Strip */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-card border border-border shadow-xs">
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                Traveling Executive
+              </label>
+              <select
+                value={selectedExecName}
+                onChange={(e) => setSelectedExecName(e.target.value)}
+                className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs font-medium focus:outline-hidden"
+              >
+                {executives.map((ex) => (
+                  <option key={ex.id} value={ex.name}>
+                    {ex.name} — {ex.title}
+                  </option>
+                ))}
+                {executives.length === 0 && (
+                  <>
+                    <option value="CEO (Michael Vance)">CEO (Michael Vance)</option>
+                    <option value="Sajjad">Sajjad (VP Engineering)</option>
+                    <option value="Jim">Jim (VP Operations)</option>
+                    <option value="Simon">Simon (VP Hardware)</option>
+                    <option value="Phil">Phil (VP Flight Testing)</option>
+                    <option value="Linda">Linda (VP Strategic Partnerships)</option>
+                  </>
+                )}
+              </select>
             </div>
-            <span className="text-xs text-muted-foreground">
-              Executive: {selectedExecName.split(" ")[0]}
-            </span>
+
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                Destination & Airport
+              </label>
+              <Input
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
+                placeholder="e.g. Los Angeles (LAX) or Vancouver (YVR)"
+                className="h-9 text-xs rounded-lg"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                Executive Assistant (EA)
+              </label>
+              <select
+                value={assistantName}
+                onChange={(e) => setAssistantName(e.target.value)}
+                className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs font-medium focus:outline-hidden"
+              >
+                <option value="Vanessa">Vanessa (Executive Assistant)</option>
+                <option value="Pat">Pat (Executive Assistant)</option>
+                <option value="Alex">Alex (Travel Coordinator)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
+                Pre-Trip Budget Cap (CAD)
+              </label>
+              <div className="relative">
+                <DollarSign className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
+                <Input
+                  type="number"
+                  value={budgetCap}
+                  onChange={(e) => setBudgetCap(Number(e.target.value))}
+                  className="h-9 pl-8 text-xs rounded-lg"
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Messages Stream */}
-          <div className="flex-1 p-4 overflow-y-auto space-y-4 text-sm">
-            {chatMessages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground p-6">
-                <div className="p-3 bg-muted rounded-full mb-3 text-indigo-500">
-                  <Plane className="w-8 h-8" />
-                </div>
-                <h4 className="font-semibold text-foreground text-sm">No Active Messages</h4>
-                <p className="text-xs max-w-sm mt-1">
-                  Type a request or click a quick prompt above to have the AI plan, price, and conflict-check travel for{" "}
-                  {selectedExecName}.
-                </p>
+          {/* ===================== FULL-WIDTH CHAT SESSION ===================== */}
+          <div className="w-full flex flex-col h-[780px] bg-card rounded-2xl border border-border shadow-xs overflow-hidden">
+            {/* Chat Session Header */}
+            <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-xs sm:text-sm font-bold text-foreground">
+                  Assistant Chat Session ({assistantName} ↔ Zenatech Travel Bot)
+                </span>
+                <Badge variant="outline" className="text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 font-semibold">
+                  Executive: {selectedExecName.split(" ")[0]}
+                </Badge>
               </div>
-            ) : (
-              chatMessages.map((msg, i) => (
-                <div
-                  key={msg.id || i}
-                  className={`flex flex-col ${
-                    msg.sender === "assistant" ? "items-end" : "items-start"
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 mb-1 px-1 text-[11px] text-muted-foreground">
-                    {msg.sender === "assistant" ? (
-                      <>
-                        <span>{assistantName} (Executive Assistant)</span>
-                        <User className="w-3 h-3 text-indigo-500" />
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-3 h-3 text-amber-500" />
-                        <span>Zenatech Travel Agent</span>
-                      </>
+
+              {/* Clear Chat Button */}
+              <div className="flex items-center gap-2">
+                {chatMessages.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={handleClearChat}
+                    className="text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1.5 h-8 px-2.5 rounded-lg border border-border/80 transition-colors"
+                    title="Clear conversation history and reset session"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Clear Chat</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Messages Stream */}
+            <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-6 text-sm">
+              {chatMessages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground p-8">
+                  <div className="p-4 bg-muted/60 rounded-full mb-3 text-indigo-500 border border-border/50">
+                    <Plane className="w-8 h-8" />
+                  </div>
+                  <h4 className="font-bold text-foreground text-base">Travel Bot Ready</h4>
+                  <p className="text-xs text-muted-foreground max-w-md mt-1.5 leading-relaxed">
+                    Ask the Travel Bot to find flights, recommend luxury hotels, or verify policy for{" "}
+                    <strong className="text-foreground">{selectedExecName}</strong>.
+                    Live flight results will appear directly in this window with complete outbound & return schedules.
+                  </p>
+                </div>
+              ) : (
+                chatMessages.map((msg, i) => (
+                  <div
+                    key={msg.id || i}
+                    className={`flex flex-col ${
+                      msg.sender === "assistant" ? "items-end" : "items-start"
+                    } space-y-2`}
+                  >
+                    <div className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
+                      {msg.sender === "assistant" ? (
+                        <>
+                          <span>{assistantName} (Executive Assistant)</span>
+                          <User className="w-3 h-3 text-indigo-500" />
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3 h-3 text-amber-500" />
+                          <span>Zenatech Travel Agent</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Text Bubble */}
+                    <div
+                      className={`p-4 rounded-2xl max-w-[85%] whitespace-pre-wrap leading-relaxed text-xs sm:text-sm ${
+                        msg.sender === "assistant"
+                          ? "bg-indigo-600 text-white rounded-tr-xs"
+                          : "bg-muted/60 text-foreground border border-border/80 rounded-tl-xs shadow-2xs"
+                      }`}
+                    >
+                      {msg.message_text}
+                    </div>
+
+                    {/* EMBEDDED FLIGHT CARDS (WIDE & FULLY DETAILED) */}
+                    {msg.sender === "bot" && msg.itinerary_payload?.flights && msg.itinerary_payload.flights.length > 0 && (
+                      <div className="w-full mt-3 space-y-4 pt-3 border-t border-border/60">
+                        <div className="flex items-center justify-between text-xs font-bold text-foreground px-1 pb-1">
+                          <span className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 text-sm">
+                            <Plane className="w-4 h-4" />
+                            Live Google Flights ({msg.itinerary_payload.flights.length} Options)
+                          </span>
+                          <span className="text-xs font-normal text-muted-foreground flex items-center gap-1">
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 inline" />
+                            Real-Time Fares Verified
+                          </span>
+                        </div>
+
+                        <div className="space-y-4">
+                          {msg.itinerary_payload.flights.map((flight: FlightSearchResultItem, fIdx: number) => (
+                            <FlightCard
+                              key={flight.option_id || fIdx}
+                              flight={flight}
+                              isSaved={savedOptionIds.has(flight.option_id)}
+                              isCheapest={fIdx === 0}
+                              onSelect={(f) => handleContinueToBooking(f)}
+                              onSave={(f) => handleSaveFlight(f)}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
-                  <div
-                    className={`p-3.5 rounded-xl max-w-[90%] whitespace-pre-wrap leading-relaxed ${
-                      msg.sender === "assistant"
-                        ? "bg-indigo-600 text-white rounded-tr-xs"
-                        : "bg-muted/70 text-foreground border border-border/80 rounded-tl-xs shadow-2xs"
+                ))
+              )}
+
+              {loading && (
+                <div className="flex items-center gap-2.5 text-xs text-muted-foreground p-3.5 bg-muted/40 rounded-xl max-w-md border border-border/60">
+                  <Loader2 className="w-4 h-4 animate-spin text-indigo-500 shrink-0" />
+                  <span>Scraping live Google Flights, Bonvoy hotels & checking calendar...</span>
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Bar */}
+            <div className="p-4 border-t border-border bg-background">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendPrompt();
+                }}
+                className="flex items-center gap-3"
+              >
+                <Input
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder={`Ask the Travel Bot (e.g. "Find direct flights to ${destination} under $${budgetCap} for ${selectedExecName}")...`}
+                  className="h-11 text-xs sm:text-sm rounded-xl px-4 flex-1"
+                  disabled={loading}
+                />
+                <Button
+                  type="submit"
+                  disabled={loading || !inputText.trim()}
+                  className="h-11 px-5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 gap-2 rounded-xl font-semibold shadow-xs"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  <span>Send</span>
+                </Button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===================== TAB: FLIGHT EXPLORER ===================== */}
+      {activeHubTab === "explorer" && (
+        <div className="space-y-6">
+          {/* Main Flight Search Bar Card */}
+          <Card className="border-border bg-card rounded-2xl shadow-xs overflow-hidden">
+            <CardHeader className="p-4 sm:p-5 border-b border-border/80 bg-muted/20">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                    <Plane className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-base font-bold text-foreground">
+                      Flight Explorer
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      Live flight fare scraper & aggregator for executive travel routes.
+                    </CardDescription>
+                  </div>
+                </div>
+
+                {/* Trip Type Toggle (Round Trip default vs One Way) */}
+                <div className="flex bg-muted/60 p-1 rounded-xl border border-border text-xs shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setSearchTripType("round_trip")}
+                    className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                      searchTripType === "round_trip"
+                        ? "bg-card text-foreground shadow-2xs font-bold"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
-                    {msg.message_text}
+                    Round Trip
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSearchTripType("one_way")}
+                    className={`px-3 py-1 rounded-lg font-semibold transition-all ${
+                      searchTripType === "one_way"
+                        ? "bg-card text-foreground shadow-2xs font-bold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    One Way
+                  </button>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="p-4 sm:p-6 space-y-4">
+              <form onSubmit={handleExecuteFlightSearch} className="space-y-4">
+                {/* Airports & Dates Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                  {/* Origin Airport */}
+                  <div className="md:col-span-3">
+                    <AirportCombobox
+                      label="From (Origin)"
+                      value={searchOrigin}
+                      onChange={(airport: Airport) => setSearchOrigin(airport.iata)}
+                      placeholder="Origin Airport..."
+                    />
+                  </div>
+
+                  {/* Swap Button */}
+                  <div className="hidden md:flex md:col-span-1 justify-center pb-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={handleSwapAirports}
+                      title="Swap Origin and Destination"
+                      className="rounded-full w-8 h-8 border-border hover:border-primary shrink-0"
+                    >
+                      <ArrowRightLeft className="w-3.5 h-3.5 text-muted-foreground" />
+                    </Button>
+                  </div>
+
+                  {/* Destination Airport */}
+                  <div className="md:col-span-3">
+                    <AirportCombobox
+                      label="To (Destination)"
+                      value={searchDestination}
+                      onChange={(airport: Airport) => setSearchDestination(airport.iata)}
+                      placeholder="Destination Airport..."
+                    />
+                  </div>
+
+                  {/* Departure Date */}
+                  <div className={searchTripType === "round_trip" ? "md:col-span-2" : "md:col-span-3"}>
+                    <label className="text-xs font-semibold text-foreground block mb-1">
+                      Departure Date
+                    </label>
+                    <Input
+                      type="date"
+                      value={searchDepartureDate}
+                      onChange={(e) => setSearchDepartureDate(e.target.value)}
+                      className="h-9 text-xs rounded-lg"
+                    />
+                  </div>
+
+                  {/* Return Date (if Round Trip) */}
+                  {searchTripType === "round_trip" && (
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-semibold text-foreground block mb-1">
+                        Return Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={searchReturnDate}
+                        min={searchDepartureDate}
+                        onChange={(e) => setSearchReturnDate(e.target.value)}
+                        className="h-9 text-xs rounded-lg"
+                      />
+                    </div>
+                  )}
+
+                  {/* Search Button */}
+                  <div className={searchTripType === "round_trip" ? "md:col-span-1" : "md:col-span-2"}>
+                    <Button
+                      type="submit"
+                      disabled={isSearchingFlights}
+                      className="w-full h-9 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs rounded-lg gap-1.5 shadow-xs"
+                    >
+                      {isSearchingFlights ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Search className="w-3.5 h-3.5" />
+                      )}
+                      <span>Search</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Secondary Filters Strip (Passengers, Cabin, Currency, Quick Presets) */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-border/60 text-xs">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Passengers */}
+                    <div className="flex items-center gap-1.5 bg-muted/30 px-2.5 py-1 rounded-lg border border-border">
+                      <Users className="w-3.5 h-3.5 text-muted-foreground" />
+                      <span className="text-muted-foreground font-medium">Pax:</span>
+                      <select
+                        value={searchAdults}
+                        onChange={(e) => setSearchAdults(parseInt(e.target.value, 10) || 1)}
+                        className="bg-transparent font-semibold text-foreground text-xs focus:outline-hidden cursor-pointer"
+                      >
+                        <option value={1}>1 Adult</option>
+                        <option value={2}>2 Adults</option>
+                        <option value={3}>3 Adults</option>
+                        <option value={4}>4 Adults</option>
+                      </select>
+                    </div>
+
+                    {/* Cabin Class */}
+                    <div className="flex items-center gap-1.5 bg-muted/30 px-2.5 py-1 rounded-lg border border-border">
+                      <span className="text-muted-foreground font-medium">Class:</span>
+                      <select
+                        value={searchCabin}
+                        onChange={(e) => setSearchCabin(e.target.value as any)}
+                        className="bg-transparent font-semibold text-foreground text-xs focus:outline-hidden cursor-pointer"
+                      >
+                        <option value="economy">Economy</option>
+                        <option value="premium_economy">Premium Economy</option>
+                        <option value="business">Business / First</option>
+                      </select>
+                    </div>
+
+                    {/* Currency */}
+                    <div className="flex items-center gap-1.5 bg-muted/30 px-2.5 py-1 rounded-lg border border-border">
+                      <span className="text-muted-foreground font-medium">Currency:</span>
+                      <select
+                        value={searchCurrency}
+                        onChange={(e) => setSearchCurrency(e.target.value)}
+                        className="bg-transparent font-semibold font-mono text-foreground text-xs focus:outline-hidden cursor-pointer"
+                      >
+                        <option value="CAD">CAD ($)</option>
+                        <option value="USD">USD ($)</option>
+                        <option value="EUR">EUR (€)</option>
+                        <option value="GBP">GBP (£)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Popular Executive Routes */}
+                  <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground flex-wrap">
+                    <span className="font-medium">Quick Routes:</span>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFlightPreset("YYZ", "LAS", "CES / Drone Arena")}
+                      className="px-2 py-0.5 rounded-md border border-border bg-background hover:bg-muted text-foreground transition-colors"
+                    >
+                      YYZ → LAS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFlightPreset("YYZ", "LAX", "Executive West")}
+                      className="px-2 py-0.5 rounded-md border border-border bg-background hover:bg-muted text-foreground transition-colors"
+                    >
+                      YYZ → LAX
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFlightPreset("YYZ", "YVR", "Vancouver Office")}
+                      className="px-2 py-0.5 rounded-md border border-border bg-background hover:bg-muted text-foreground transition-colors"
+                    >
+                      YYZ → YVR
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickFlightPreset("YYZ", "LHR", "UK Headquarters")}
+                      className="px-2 py-0.5 rounded-md border border-border bg-background hover:bg-muted text-foreground transition-colors"
+                    >
+                      YYZ → LHR
+                    </button>
+                  </div>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+
+          {/* Results Toolbar & List */}
+          {isSearchingFlights ? (
+            <Card className="border-border bg-card rounded-2xl p-12 text-center shadow-xs">
+              <Loader2 className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-3" />
+              <div className="text-sm font-bold text-foreground">Scraping Live Flights...</div>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
+                Searching real-time Google Flights and airline inventory for {searchOrigin} → {searchDestination}.
+              </p>
+            </Card>
+          ) : searchResults.length > 0 ? (
+            <div className="space-y-4">
+              {/* Results Filter & Sorting Strip */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border shadow-xs text-xs">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
+                    {searchResults.length} Flights Found
+                  </Badge>
+                  <span className="text-muted-foreground">
+                    {searchOrigin} to {searchDestination} • {searchTripType === "round_trip" ? "Round Trip" : "One Way"}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Stops Filter */}
+                  <select
+                    value={searchMaxStops === undefined ? "all" : searchMaxStops}
+                    onChange={(e) => setSearchMaxStops(e.target.value === "all" ? undefined : parseInt(e.target.value, 10))}
+                    className="h-8 rounded-lg border border-input bg-background px-2 text-xs font-medium focus:outline-hidden"
+                  >
+                    <option value="all">All Stops</option>
+                    <option value={0}>Non-stop Only</option>
+                    <option value={1}>Up to 1 Stop</option>
+                  </select>
+
+                  {/* Sort By */}
+                  <select
+                    value={searchSortBy}
+                    onChange={(e) => setSearchSortBy(e.target.value as any)}
+                    className="h-8 rounded-lg border border-input bg-background px-2 text-xs font-medium focus:outline-hidden"
+                  >
+                    <option value="recommended">Sort: Recommended</option>
+                    <option value="lowest_price">Sort: Lowest Price</option>
+                    <option value="shortest_duration">Sort: Shortest Duration</option>
+                    <option value="departure_time">Sort: Departure Time</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Flights Grid */}
+              <div className="space-y-3">
+                {searchResults.map((flight, idx) => (
+                  <FlightCard
+                    key={flight.option_id || idx}
+                    flight={flight}
+                    onSelect={handleContinueToBooking}
+                    onSave={handleSaveFlight}
+                    onAnalyzeWithAi={handleAskBotAboutFlight}
+                    isSaved={savedOptionIds.has(flight.option_id)}
+                    isCheapest={idx === 0 && searchSortBy === "lowest_price"}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : hasSearchedFlights ? (
+            <Card className="border-border bg-card rounded-2xl p-12 text-center shadow-xs">
+              <Plane className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+              <div className="text-sm font-bold text-foreground">No flights found</div>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
+                No flights were returned for this route and date combination. Try adjusting your dates or airports.
+              </p>
+            </Card>
+          ) : (
+            <Card className="border-border bg-card rounded-2xl p-8 text-center shadow-xs">
+              <div className="max-w-md mx-auto space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto">
+                  <Plane className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">Explore Corporate Airline Flights</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Select origin and destination airports above, or pick one of the quick executive routes to browse real-time airline fares.
+                  </p>
+                </div>
+                <Button
+                  onClick={() => handleExecuteFlightSearch()}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl h-9 gap-1.5"
+                >
+                  <Search className="w-3.5 h-3.5" />
+                  <span>Search Flights for {searchOrigin} → {searchDestination}</span>
+                </Button>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* ===================== TAB 2: SAVED FLIGHT OPTIONS ===================== */}
+      {activeHubTab === "saved" && (
+        <Card className="border-border bg-card rounded-2xl shadow-xs">
+          <CardHeader>
+            <CardTitle className="text-base font-bold flex items-center justify-between">
+              <span>Saved Flight Options ({savedOptions.length})</span>
+              <Button size="xs" variant="outline" onClick={loadSavedOptions} className="gap-1 text-xs rounded-lg">
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refresh</span>
+              </Button>
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Executive flight itineraries bookmarked for review or supervisor approval.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {savedOptions.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground text-xs">
+                No saved flights yet. Click the bookmark icon on any flight in the chat session.
+              </div>
+            ) : (
+              savedOptions.map((opt) => (
+                <div
+                  key={opt.id}
+                  className="p-4 rounded-xl border border-border bg-muted/20 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                >
+                  <div className="space-y-1">
+                    <div className="font-semibold text-foreground flex items-center gap-2">
+                      <span>{opt.airline_name}</span>
+                      <span className="font-mono text-muted-foreground">{opt.flight_numbers}</span>
+                      <Badge variant="outline" className="text-[10px]">
+                        {opt.trip_type === "round_trip" ? "Round Trip" : "One Way"}
+                      </Badge>
+                    </div>
+                    <div className="text-muted-foreground">
+                      {opt.origin_airport} → {opt.destination_airport} • Depart {opt.departure_date}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-foreground">
+                        ${opt.displayed_price.toFixed(2)} {opt.currency}
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">Saved on {new Date(opt.created_at).toLocaleDateString()}</div>
+                    </div>
+                    {opt.itinerary_payload && (
+                      <Button
+                        size="xs"
+                        onClick={() => handleContinueToBooking(opt.itinerary_payload)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs"
+                      >
+                        Select Flight
+                      </Button>
+                    )}
                   </div>
                 </div>
               ))
             )}
-            {loading && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-muted/40 rounded-lg max-w-xs">
-                <Loader2 className="w-4 h-4 animate-spin text-indigo-500" />
-                <span>Searching airline inventory, Bonvoy hotels & conflict checks...</span>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+          </CardContent>
+        </Card>
+      )}
 
-          {/* Input Bar */}
-          <div className="p-3 border-t border-border bg-background">
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleSendPrompt();
-              }}
-              className="flex items-center gap-2"
-            >
-              <Input
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                placeholder={`Ask Travel Bot (e.g. 'Book CEO Air Canada flight next Tuesday to LAX under $5k')...`}
-                className="h-10 text-sm focus-visible:ring-indigo-500"
-                disabled={loading}
-              />
-              <Button
-                type="submit"
-                disabled={loading || !inputText.trim()}
-                className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 gap-1.5"
-              >
-                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                <span className="hidden sm:inline">Send</span>
+      {/* ===================== TAB 3: BOOKING SESSIONS AUDIT ===================== */}
+      {activeHubTab === "sessions" && (
+        <Card className="border-border bg-card rounded-2xl shadow-xs">
+          <CardHeader>
+            <CardTitle className="text-base font-bold flex items-center justify-between">
+              <span>Booking Sessions & Chrome Extension Audit ({recentSessions.length})</span>
+              <Button size="xs" variant="outline" onClick={loadRecentSessions} className="gap-1 text-xs rounded-lg">
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Refresh</span>
               </Button>
-            </form>
-          </div>
-        </div>
-
-        {/* Right Column: AI Generated Itineraries & One-Click Booking */}
-        <div className="lg:col-span-6 flex flex-col h-[640px] overflow-y-auto space-y-4">
-          {/* Confirmed Booking Toast / Card */}
-          {lastBookingResult && (
-            <Card className="border-emerald-500/50 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-sm animate-in fade-in duration-300">
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                    <CardTitle className="text-base text-emerald-900 dark:text-emerald-200">
-                      Booking Confirmed & Synchronized!
-                    </CardTitle>
-                  </div>
-                  <Badge className="bg-emerald-600 text-white text-xs">
-                    PNR: {lastBookingResult.confirmation_code}
-                  </Badge>
-                </div>
-                <CardDescription className="text-emerald-700 dark:text-emerald-300 text-xs">
-                  {lastBookingResult.message}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="pt-0 text-xs space-y-1.5 text-foreground/80">
-                <div className="flex justify-between border-t border-emerald-200 dark:border-emerald-800/50 pt-2">
-                  <span>E-Ticket Reference:</span>
-                  <strong className="font-mono">{lastBookingResult.e_ticket}</strong>
-                </div>
-                <div className="flex justify-between">
-                  <span>Calendar Invite Status:</span>
-                  <strong className="text-emerald-600 dark:text-emerald-400">
-                    {lastBookingResult.calendar_sync}
-                  </strong>
-                </div>
-                <div className="flex justify-between">
-                  <span>Budget Allocation Impact:</span>
-                  <strong className="text-emerald-600 dark:text-emerald-400">
-                    Pre-Trip Spent Committed in Real-Time
-                  </strong>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Options Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Crown className="w-4 h-4 text-amber-500" />
-              <h3 className="font-semibold text-sm text-foreground">
-                Synthesized Travel Itineraries ({activeOptions.length} Options)
-              </h3>
-            </div>
-            <span className="text-xs text-muted-foreground">
-              Filtered for: {selectedExecName.split(" ")[0]}
-            </span>
-          </div>
-
-          {activeOptions.length === 0 ? (
-            <div className="flex-1 flex flex-col items-center justify-center p-8 bg-card rounded-xl border border-border border-dashed text-center text-muted-foreground">
-              <Building2 className="w-10 h-10 mb-2 text-muted-foreground/60" />
-              <p className="text-sm font-medium">No Itinerary Packages Generated Yet</p>
-              <p className="text-xs max-w-xs mt-1">
-                Send a chat query on the left. The AI bot will parse airline schedules, seat pods, luxury hotels, and
-                car rentals into ready-to-book cards here.
-              </p>
-            </div>
-          ) : (
-            activeOptions.map((opt) => (
-              <Card
-                key={opt.option_id}
-                className="border-border hover:border-indigo-400 dark:hover:border-indigo-600 transition-all shadow-xs overflow-hidden"
-              >
-                <div className="bg-muted/40 p-3 border-b border-border flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      className={
-                        opt.tier.includes("Recommended")
-                          ? "bg-indigo-600 text-white text-xs font-semibold"
-                          : "bg-secondary text-secondary-foreground text-xs"
-                      }
-                    >
-                      {opt.tier}
-                    </Badge>
-                    <span className="text-xs font-bold text-foreground">{opt.airline}</span>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-extrabold text-foreground">
-                      ${opt.total_package_cost.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                    </div>
-                    <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                      Within Budget (${opt.budget_headroom.toFixed(0)} under cap)
-                    </div>
-                  </div>
-                </div>
-
-                <CardContent className="p-4 space-y-3.5 text-xs">
-                  {/* Flight Details */}
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Live sessions initiated by users. Tracks confirmation codes, e-tickets, and price changes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {recentSessions.length === 0 ? (
+              <div className="text-center py-10 text-muted-foreground text-xs">
+                No active booking sessions yet. Select a flight to launch the real-time tracking session.
+              </div>
+            ) : (
+              recentSessions.map((session) => (
+                <div
+                  key={session.id}
+                  onClick={() => {
+                    setActiveSession(session);
+                    setIsModalOpen(true);
+                  }}
+                  className="p-4 rounded-xl border border-border bg-muted/20 hover:border-primary/40 cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                >
                   <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                      <Plane className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>Flights & Cabin Seating</span>
+                    <div className="font-semibold text-foreground flex items-center gap-2">
+                      <span>{session.provider_name}</span>
+                      <Badge
+                        variant="outline"
+                        className={`text-[10px] ${
+                          session.status === "CONFIRMED"
+                            ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/30"
+                            : session.status === "BOOKING_LINK_OPENED"
+                            ? "bg-blue-500/10 text-blue-600 border-blue-500/30"
+                            : "bg-muted text-muted-foreground"
+                        }`}
+                      >
+                        {session.status}
+                      </Badge>
+                      {session.confirmation_reference && (
+                        <span className="font-mono text-emerald-600 font-bold">PNR: {session.confirmation_reference}</span>
+                      )}
                     </div>
-                    <div className="bg-muted/20 p-2 rounded-md border border-border/50 space-y-1">
-                      <div className="text-foreground font-medium">{opt.flight_outbound}</div>
-                      <div className="text-muted-foreground">{opt.flight_return}</div>
-                      <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px]">
-                        <Badge variant="outline" className="text-[10px] bg-background">
-                          Cabin: {opt.cabin}
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] bg-background">
-                          Seat: {opt.seat_preferred}
-                        </Badge>
-                        <span className="text-indigo-600 dark:text-indigo-400 font-medium">
-                          +{opt.points_earned.toLocaleString()} pts ({opt.loyalty_program.split("(")[0]})
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Hotel Details */}
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 font-semibold text-foreground">
-                      <Building2 className="w-3.5 h-3.5 text-emerald-500" />
-                      <span>Lodging & Corporate Perks</span>
-                    </div>
-                    <div className="bg-muted/20 p-2 rounded-md border border-border/50 space-y-1">
-                      <div className="text-foreground font-medium">{opt.hotel}</div>
-                      <div className="text-emerald-700 dark:text-emerald-400 text-[11px]">
-                        {opt.hotel_perks}
-                      </div>
+                    <div className="text-muted-foreground font-mono text-[11px]">
+                      Session ID: {session.id} • Started {new Date(session.created_at).toLocaleTimeString()}
                     </div>
                   </div>
-
-                  {/* Ground & Drone Baggage */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
-                    <div className="p-2 bg-muted/20 rounded-md border border-border/50">
-                      <div className="flex items-center gap-1 font-semibold text-foreground mb-0.5">
-                        <Car className="w-3 h-3 text-amber-500" />
-                        <span>Rental Vehicle</span>
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="font-bold text-foreground">
+                        Observed: ${session.observed_price?.toFixed(2)} {session.currency}
                       </div>
-                      <div className="text-muted-foreground">{opt.car_rental}</div>
+                      {session.final_amount_paid && (
+                        <div className="text-emerald-600 font-bold text-[11px]">
+                          Confirmed: ${session.final_amount_paid.toFixed(2)}
+                        </div>
+                      )}
                     </div>
-                    <div className="p-2 bg-muted/20 rounded-md border border-border/50">
-                      <div className="flex items-center gap-1 font-semibold text-foreground mb-0.5">
-                        <Luggage className="w-3 h-3 text-cyan-500" />
-                        <span>Special Luggage / Drones</span>
-                      </div>
-                      <div className="text-muted-foreground">{opt.drone_gear_support}</div>
-                    </div>
+                    <Button size="xs" variant="outline" className="text-xs rounded-lg">
+                      Track Live
+                    </Button>
                   </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      )}
 
-                  {/* Cost breakdown strip */}
-                  <div className="flex items-center justify-between pt-1 border-t border-border text-[11px] text-muted-foreground">
-                    <span>Flight: ${opt.flight_cost}</span>
-                    <span>Hotel: ${opt.hotel_cost}</span>
-                    <span>Car: ${opt.car_cost}</span>
-                    <span className="font-semibold text-foreground">Total: ${opt.total_package_cost}</span>
-                  </div>
-
-                  {/* Auto-Book Button */}
-                  <Button
-                    onClick={() => handleAutoBook(opt)}
-                    disabled={bookingInProgress === opt.option_id}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs h-9 gap-2 shadow-xs"
-                  >
-                    {bookingInProgress === opt.option_id ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Reserving Flights & Booking Confirmed...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Instant 1-Click Auto-Book & Calendar Dispatch</span>
-                      </>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </div>
-      </div>
+      {/* Booking Tracker Modal Dialog */}
+      <BookingTrackerModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        session={activeSession}
+        onSessionUpdated={() => loadRecentSessions()}
+      />
     </div>
   );
 }

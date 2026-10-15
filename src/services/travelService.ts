@@ -241,6 +241,8 @@ export const travelService = {
       formData,
       { headers: { "Content-Type": "multipart/form-data" } }
     ),
+  aiRefineReceipt: (payload: { raw_text?: string; current_data?: any; notes_or_hint?: string }) =>
+    apiClient.post<import("@/types/travel").ReceiptExtractionResult>("/api/travel/receipts/ai-refine", payload),
   createReceipt: (payload: Partial<import("@/types/travel").TravelReceipt>) =>
     apiClient.post<import("@/types/travel").TravelReceipt>("/api/travel/receipts", payload),
   getReceipts: (params?: {
@@ -267,5 +269,6 @@ export const travelService = {
     apiClient.put<import("@/types/travel").TravelReceipt>(`/api/travel/receipts/${receiptId}`, payload),
   deleteReceipt: (receiptId: string) =>
     apiClient.delete<{ message: string }>(`/api/travel/receipts/${receiptId}`),
+  getCurrencies: () =>
+    apiClient.get<import("@/types/travel").CurrenciesApiResponse>("/api/travel/receipts/currencies"),
 };
-

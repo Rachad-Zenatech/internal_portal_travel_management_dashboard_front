@@ -493,6 +493,14 @@ export interface TravelReceipt {
   currency: string;
   expense_category: "flight" | "lodging" | "ground_transport" | "meals_entertainment" | "drone_gear_cargo" | "fuel" | "equipment_supplies" | "other" | string;
   payment_method: string;
+  policy?: string;
+  amount_cad?: number;
+  exchange_rate?: number;
+  description?: string | null;
+  is_reimbursable?: boolean;
+  is_billable?: boolean;
+  project_code?: string | null;
+  attendees?: string | null;
   line_items: ReceiptLineItem[];
   raw_extracted_text?: string | null;
   extraction_confidence: number;
@@ -518,6 +526,14 @@ export interface ReceiptExtractionResult {
   currency: string;
   expense_category: string;
   payment_method: string;
+  policy?: string;
+  amount_cad?: number;
+  exchange_rate?: number;
+  description?: string | null;
+  is_reimbursable?: boolean;
+  is_billable?: boolean;
+  project_code?: string | null;
+  attendees?: string | null;
   receipt_number?: string | null;
   line_items: ReceiptLineItem[];
   extraction_confidence: number;
@@ -541,6 +557,21 @@ export interface ReceiptStatsSummary {
 export interface ReceiptsApiResponse {
   receipts: TravelReceipt[];
   stats: ReceiptStatsSummary;
+}
+
+export interface CurrencyOption {
+  code: string;
+  name: string;
+  symbol: string;
+  countries: string[];
+  default_exchange_rate: number;
+  is_popular?: boolean;
+}
+
+export interface CurrenciesApiResponse {
+  currencies: CurrencyOption[];
+  total: number;
+  source: string;
 }
 
 export interface VehicleCatalogMake {
@@ -568,6 +599,4 @@ export interface VehicleCatalogResponse {
   models: VehicleCatalogModel[];
   common_models: string[];
 }
-
-
 

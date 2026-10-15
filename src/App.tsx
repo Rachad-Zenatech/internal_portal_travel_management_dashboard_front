@@ -90,6 +90,7 @@ function App() {
               <Route path="/travel/stipends" element={<TravelStipendPage />} />
               <Route path="/travel/drone-cargo" element={<DroneCargoPage />} />
               <Route path="/travel/vehicles" element={<VehicleLibraryPage />} />
+              <Route path="/travel/flights" element={<Navigate to="/travel/ai-assistant" replace />} />
               <Route path="/travel/calendar" element={<TravelCalendarPage />} />
               <Route path="/travel/receipts" element={<ReceiptExpensePage />} />
 
