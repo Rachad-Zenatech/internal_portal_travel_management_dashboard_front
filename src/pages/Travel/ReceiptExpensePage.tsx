@@ -36,6 +36,10 @@ import {
   ChevronsUpDown,
   X,
   ExternalLink,
+  Download,
+  Maximize2,
+  Paperclip,
+  Eye,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -143,6 +147,11 @@ export default function ReceiptExpensePage() {
   const [formExchangeRate, setFormExchangeRate] = useState<number>(1.385);
   const [formTax, setFormTax] = useState<number>(0.0);
   const [formTip, setFormTip] = useState<number>(0.0);
+  const [formSubtotal, setFormSubtotal] = useState<number | null>(null);
+  const [formDiscount, setFormDiscount] = useState<number>(0.0);
+  const [formNetSubtotal, setFormNetSubtotal] = useState<number | null>(null);
+  const [formCalculationVerified, setFormCalculationVerified] = useState<boolean>(false);
+  const [formDiscountDetails, setFormDiscountDetails] = useState<string>("");
   const [formDescription, setFormDescription] = useState("");
   const [formReceiptNum, setFormReceiptNum] = useState("");
   const [formEventId, setFormEventId] = useState("");
@@ -180,6 +189,73 @@ export default function ReceiptExpensePage() {
 
   // Detail Modal
   const [selectedReceiptDetail, setSelectedReceiptDetail] = useState<TravelReceipt | null>(null);
+  const detailFileInputRef = useRef<HTMLInputElement>(null);
+
+  // ===================== BATCH UPLOAD STATE =====================
+  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isBatchProcessing, setIsBatchProcessing] = useState(false);
+  const [batchFileCount, setBatchFileCount] = useState<number>(0);
+  const [batchProgressText, setBatchProgressText] = useState("");
+  const [batchCreatedDrafts, setBatchCreatedDrafts] = useState<TravelReceipt[]>([]);
+  const [batchErrors, setBatchErrors] = useState<Array<{ file_name: string; error: string }>>([]);
+  const batchFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Fullscreen Lightbox & Download State
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string>("");
+  const [lightboxName, setLightboxName] = useState<string>("");
+  const [lightboxType, setLightboxType] = useState<string>("");
+  const [lightboxZoom, setLightboxZoom] = useState<number>(1.0);
+  const [lightboxRotate, setLightboxRotate] = useState<number>(0);
+
+  const openLightbox = (src: string, name: string, type?: string) => {
+    if (!src) return;
+    setLightboxSrc(src);
+    setLightboxName(name || "receipt");
+    setLightboxType(type || (name?.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg"));
+    setLightboxZoom(1.0);
+    setLightboxRotate(0);
+    setLightboxOpen(true);
+  };
+
+  const handleDownloadAttachment = (fileData: string, fileName: string, receiptId?: string) => {
+    if (fileData) {
+      const a = document.createElement("a");
+      a.href = fileData;
+      a.download = fileName || "receipt_attachment";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      toast.success(`Downloading ${fileName || "receipt"}...`);
+    } else if (receiptId) {
+      window.open(travelService.getReceiptAttachmentUrl(receiptId), "_blank");
+    } else {
+      toast.error("No attachment file data available to download.");
+    }
+  };
+
+  const handleAttachReceiptToExisting = async (file: File) => {
+    if (!selectedReceiptDetail) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const dataUrl = e.target?.result as string;
+      const mime = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+      try {
+        const updated = await travelService.updateReceipt(selectedReceiptDetail.id, {
+          file_name: file.name,
+          file_type: mime,
+          file_size_bytes: file.size,
+          file_data: dataUrl,
+        });
+        setSelectedReceiptDetail(updated);
+        queryClient.invalidateQueries({ queryKey: ["travelReceipts"] });
+        toast.success(`Attached ${file.name} to expense!`);
+      } catch (err: any) {
+        toast.error("Failed to attach receipt to expense.");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Amount in CAD (Live Computed or Explicit)
   const amountCad = useMemo(() => {
@@ -357,6 +433,63 @@ export default function ReceiptExpensePage() {
 
   // ===================== FILE UPLOAD & OCR TRIGGER =====================
   // ===================== FILE UPLOAD & AI OCR TRIGGER =====================
+  const handleMultipleFilesSelected = async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    if (fileArray.length === 1) {
+      if (activeTab !== "new_expense") {
+        resetForm();
+        setActiveTab("new_expense");
+      }
+      await handleFileSelected(fileArray[0]);
+      return;
+    }
+
+    // Multiple receipts selected -> run batch upload & extraction
+    await executeBatchUpload(fileArray);
+  };
+
+  const executeBatchUpload = async (fileArray: File[]) => {
+    setIsBatchProcessing(true);
+    setBatchFileCount(fileArray.length);
+    setBatchProgressText(`Analyzing and extracting ${fileArray.length} receipts with AI multimodal vision...`);
+    setBatchErrors([]);
+
+    const formData = new FormData();
+    fileArray.forEach((f) => {
+      formData.append("files", f);
+    });
+    if (formEventId && formEventId !== "all") {
+      formData.append("event_id", formEventId);
+    }
+    formData.append("user_email", user?.email || "alex.rivera@zenatech.com");
+    formData.append("user_name", user?.full_name || "Alex Rivera");
+    formData.append("auto_save_draft", "true");
+
+    try {
+      const data = await travelService.batchUploadAndExtractReceipts(formData);
+
+      setBatchCreatedDrafts(data.items || []);
+      setBatchErrors(data.errors || []);
+      setIsBatchProcessing(false);
+      setIsBatchModalOpen(true);
+
+      queryClient.invalidateQueries({ queryKey: ["travelReceipts"] });
+
+      if (data.success_count > 0) {
+        toast.success(`Batch complete: ${data.success_count} receipt${data.success_count > 1 ? "s" : ""} extracted and saved as Draft!`);
+      }
+      if (data.failed_count > 0) {
+        toast.error(`${data.failed_count} file${data.failed_count > 1 ? "s" : ""} failed to extract.`);
+      }
+    } catch (err: any) {
+      console.error("Batch upload failed:", err);
+      setIsBatchProcessing(false);
+      toast.error(err?.response?.data?.detail || "Batch receipt upload failed.");
+    }
+  };
+
   const handleFileSelected = async (file: File) => {
     setAttachmentFile(file);
     setAttachmentName(file.name);
@@ -386,180 +519,171 @@ export default function ReceiptExpensePage() {
     }
 
     setIsOcrRunning(true);
-    setOcrProgress({ status: "Extracting document with Gemini 2.5 Flash AI...", progress: 0.15 });
+    const isPdf = attachmentType.includes("pdf") || targetFile?.name?.toLowerCase().endsWith(".pdf");
 
     try {
-      // 1. Primary AI Engine: Upload to backend for PyMuPDF + Gemini 2.5 Flash Vision
-      const formData = new FormData();
-      if (targetFile) {
-        formData.append("file", targetFile);
-      } else if (targetDataUrl) {
-        const res = await fetch(targetDataUrl);
-        const blob = await res.blob();
-        formData.append("file", blob, attachmentName || "receipt.pdf");
+      let finalMerchant = "";
+      let finalDate = "";
+      let finalTotal = 0;
+      let finalTax: number | undefined = undefined;
+      let finalTip: number | undefined = 0;
+      let finalSubtotal: number | null = null;
+      let finalDiscount: number = 0;
+      let finalNetSubtotal: number | null = null;
+      let finalCalculationVerified: boolean = false;
+      let finalDiscountDetails: string = "";
+      let finalCurr = "USD";
+      let finalRate = 1.385;
+      let finalCat = "equipment_supplies";
+      let finalPolicy = "Standard Corporate Travel Policy";
+      let finalPayment = "Company Corporate Card";
+      let finalRecNum = "";
+      let finalDesc = "";
+      let finalItems: Array<{ description: string; quantity: number; unit_price: number; amount: number }> = [];
+      let finalRawText = "";
+      let confidence = 95;
+
+      let serverSuccess = false;
+
+      // 1. Primary: Server-side AI & Multimodal Vision Extraction (Gemini / Ollama / PyMuPDF)
+      try {
+        setOcrProgress({ status: "Auditing & extracting receipt with AI multimodal vision...", progress: 0.35 });
+        const formData = new FormData();
+        if (targetFile) {
+          formData.append("file", targetFile);
+        } else if (targetDataUrl) {
+          const res = await fetch(targetDataUrl);
+          const blob = await res.blob();
+          formData.append("file", blob, attachmentName || (isPdf ? "receipt.pdf" : "receipt.jpg"));
+        }
+        if (formEventId && formEventId !== "all") {
+          formData.append("event_id", formEventId);
+        }
+        if (attachmentName || targetFile?.name) {
+          formData.append("user_hint", attachmentName || targetFile?.name || "");
+        }
+
+        const serverResult = await travelService.uploadAndExtractReceipt(formData);
+
+        if (serverResult && (serverResult.extraction_confidence || 0) > 0 && serverResult.merchant_name !== "Unknown Vendor") {
+          finalMerchant = serverResult.merchant_name || "";
+          finalDate = serverResult.transaction_date || "";
+          finalTotal = serverResult.total_amount && serverResult.total_amount > 0 ? serverResult.total_amount : 0;
+          finalTax = serverResult.tax_amount;
+          finalTip = serverResult.tip_amount || 0;
+          finalSubtotal = serverResult.subtotal_amount ?? null;
+          finalDiscount = Number(serverResult.discount_amount) || 0;
+          finalNetSubtotal = serverResult.net_subtotal ?? null;
+          finalCalculationVerified = Boolean(serverResult.calculation_verified);
+          finalDiscountDetails = serverResult.discount_details || "";
+          finalCurr = serverResult.currency || "CAD";
+          finalRate = serverResult.exchange_rate || (finalCurr === "CAD" ? 1.0 : 1.385);
+          finalCat = serverResult.expense_category || "meals_entertainment";
+          finalPolicy = serverResult.policy || "Daily Per Diem Cap Policy ($120/day)";
+          finalPayment = serverResult.payment_method || "Company Corporate Card";
+          finalRecNum = serverResult.receipt_number || "";
+          finalDesc = serverResult.description || "";
+          finalItems = serverResult.line_items || [];
+          finalRawText = serverResult.raw_extracted_text || "";
+          confidence = serverResult.extraction_confidence || 98;
+          serverSuccess = true;
+        }
+      } catch (serverErr) {
+        console.warn("Server multimodal extraction unavailable, falling back to local OCR:", serverErr);
       }
-      if (formEventId && formEventId !== "all") {
-        formData.append("event_id", formEventId);
-      }
 
-      setOcrProgress({ status: "Analyzing receipt & itemization with Gemini...", progress: 0.55 });
-      const serverResult = await travelService.uploadAndExtractReceipt(formData);
+      // 2. Secondary Fallback: Client-Side Tesseract OCR + AI reasoning
+      if (!serverSuccess && !isPdf && (targetFile || targetDataUrl)) {
+        setOcrProgress({ status: "Extracting receipt text with Tesseract OCR...", progress: 0.5 });
+        const ocrResult = await runTesseractOcr(targetFile || targetDataUrl!, (progress) => {
+          setOcrProgress({ status: progress.status, progress: 0.4 + progress.progress * 0.4 });
+        });
 
-      if (serverResult) {
-        let extractedMerchant = serverResult.merchant_name && serverResult.merchant_name !== "Unknown Vendor" ? serverResult.merchant_name : "";
-        let extractedDate = serverResult.transaction_date || "";
-        let extractedTotal = serverResult.total_amount && serverResult.total_amount > 0 ? serverResult.total_amount : 0;
-        let extractedTax = serverResult.tax_amount;
-        let extractedTip = serverResult.tip_amount;
-        let extractedCurr = serverResult.currency || "USD";
-        let extractedRate = serverResult.exchange_rate || 1.385;
-        let extractedCat = serverResult.expense_category || "meals_entertainment";
-        let extractedPolicy = serverResult.policy || "Standard Corporate Travel Policy";
-        let extractedPayment = serverResult.payment_method || "Company Corporate Card";
-        let extractedRecNum = serverResult.receipt_number || "";
-        let extractedDesc = serverResult.description || "";
-        let extractedItems = serverResult.line_items || [];
-        const extractedRawText = serverResult.raw_extracted_text || "";
-        let confidence = serverResult.extraction_confidence || 98;
+        finalMerchant = ocrResult.merchantName && ocrResult.merchantName !== "Unknown Vendor" ? ocrResult.merchantName : "";
+        finalDate = ocrResult.transactionDate || "";
+        finalTotal = ocrResult.totalAmount && ocrResult.totalAmount > 0 ? ocrResult.totalAmount : 0;
+        finalTax = ocrResult.taxAmount;
+        finalTip = ocrResult.tipAmount || 0;
+        finalCurr = ocrResult.currency || "CAD";
+        finalRate = ocrResult.exchangeRate || (finalCurr === "CAD" ? 1.0 : 1.385);
+        finalCat = ocrResult.category || "meals_entertainment";
+        finalPolicy = ocrResult.policy || "Standard Corporate Travel Policy";
+        finalPayment = ocrResult.payThrough || "Company Corporate Card";
+        finalRecNum = ocrResult.receiptNumber || "";
+        finalDesc = ocrResult.description || "";
+        finalItems = ocrResult.lineItems || [];
+        finalRawText = ocrResult.rawText || "";
+        confidence = ocrResult.confidence || 90;
 
-        // Auto AI Refine: Automatically refine and standardize attributes with Gemini reasoning
-        setOcrProgress({ status: "Refining & cross-checking with Gemini AI...", progress: 0.85 });
+        // AI Reasoning Refinement
+        setOcrProgress({ status: "Refining & auditing with AI reasoning...", progress: 0.85 });
         try {
           const refined = await travelService.aiRefineReceipt({
-            raw_text: extractedRawText,
+            raw_text: finalRawText,
             current_data: {
-              merchant_name: extractedMerchant,
-              transaction_date: extractedDate,
-              total_amount: extractedTotal,
-              currency: extractedCurr,
-              expense_category: extractedCat,
-              receipt_number: extractedRecNum,
-              description: extractedDesc,
-              line_items: extractedItems,
+              merchant_name: finalMerchant,
+              transaction_date: finalDate,
+              total_amount: finalTotal,
+              currency: finalCurr,
+              expense_category: finalCat,
+              receipt_number: finalRecNum,
+              description: finalDesc,
+              line_items: finalItems,
             },
-            notes_or_hint: extractedDesc || attachmentName,
+            notes_or_hint: attachmentName || targetFile?.name,
           });
 
           if (refined) {
-            if (refined.merchant_name) extractedMerchant = refined.merchant_name;
-            if (refined.transaction_date) extractedDate = refined.transaction_date;
-            if (refined.total_amount && refined.total_amount > 0) extractedTotal = refined.total_amount;
-            if (refined.tax_amount !== undefined) extractedTax = refined.tax_amount;
-            if (refined.tip_amount !== undefined) extractedTip = refined.tip_amount;
-            if (refined.currency) extractedCurr = refined.currency;
-            if (refined.expense_category) extractedCat = refined.expense_category;
-            if (refined.policy) extractedPolicy = refined.policy;
-            if (refined.payment_method) extractedPayment = refined.payment_method;
-            if (refined.receipt_number) extractedRecNum = refined.receipt_number;
-            if (refined.description) extractedDesc = refined.description;
-            if (refined.line_items && refined.line_items.length > 0) extractedItems = refined.line_items;
-            confidence = refined.extraction_confidence || 99;
+            if (refined.merchant_name && refined.merchant_name !== "Unknown Vendor") finalMerchant = refined.merchant_name;
+            if (refined.transaction_date) finalDate = refined.transaction_date;
+            if (refined.total_amount && refined.total_amount > 0) finalTotal = refined.total_amount;
+            if (refined.tax_amount !== undefined) finalTax = refined.tax_amount;
+            if (refined.tip_amount !== undefined) finalTip = refined.tip_amount;
+            if (refined.subtotal_amount !== undefined) finalSubtotal = refined.subtotal_amount;
+            if (refined.discount_amount !== undefined) finalDiscount = Number(refined.discount_amount) || 0;
+            if (refined.net_subtotal !== undefined) finalNetSubtotal = refined.net_subtotal;
+            if (refined.calculation_verified !== undefined) finalCalculationVerified = Boolean(refined.calculation_verified);
+            if (refined.discount_details) finalDiscountDetails = refined.discount_details;
+            if (refined.currency) finalCurr = refined.currency;
+            if (refined.exchange_rate) finalRate = refined.exchange_rate;
+            if (refined.expense_category) finalCat = refined.expense_category;
+            if (refined.policy) finalPolicy = refined.policy;
+            if (refined.payment_method) finalPayment = refined.payment_method;
+            if (refined.receipt_number) finalRecNum = refined.receipt_number;
+            if (refined.description) finalDesc = refined.description;
+            if (refined.line_items && refined.line_items.length > 0) finalItems = refined.line_items;
+            confidence = refined.extraction_confidence || 95;
           }
         } catch (aiRefineErr) {
-          console.warn("Auto AI refine post-processing notice:", aiRefineErr);
-        }
-
-        if (extractedMerchant) setFormMerchant(extractedMerchant);
-        if (extractedDate) setFormDate(extractedDate);
-        if (extractedTotal > 0) setFormSpendAmount(extractedTotal);
-        if (extractedTax !== undefined) setFormTax(extractedTax);
-        if (extractedTip !== undefined) setFormTip(extractedTip);
-        if (extractedCurr) setFormCurrency(extractedCurr);
-        if (extractedRate) setFormExchangeRate(extractedRate);
-        if (extractedCat) setFormCategory(extractedCat);
-        if (extractedPolicy) setFormPolicy(extractedPolicy);
-        if (extractedPayment) setFormPayThrough(extractedPayment);
-        if (extractedRecNum) setFormReceiptNum(extractedRecNum);
-        if (extractedDesc) setFormDescription(extractedDesc);
-        if (extractedItems && extractedItems.length > 0) setFormLineItems(extractedItems);
-        if (extractedRawText) setRawOcrText(extractedRawText);
-        setOcrConfidence(confidence);
-        toast.success(`Extracted & AI-refined with Gemini (${confidence}% confidence)!`);
-        setMobilePane("form");
-        return;
-      }
-    } catch (serverErr: any) {
-      console.warn("Server AI extraction failed or offline, checking fallback:", serverErr);
-
-      // Fallback: If it's an image, attempt client-side Tesseract.js
-      const isPdf = attachmentType.includes("pdf") || targetFile?.name?.toLowerCase().endsWith(".pdf");
-      if (!isPdf && (targetFile || targetDataUrl)) {
-        try {
-          setOcrProgress({ status: "Extracting text with Tesseract OCR...", progress: 0.65 });
-          const ocrResult = await runTesseractOcr(targetFile || targetDataUrl!, (progress) => {
-            setOcrProgress(progress);
-          });
-          let finalMerchant = ocrResult.merchantName && ocrResult.merchantName !== "Unknown Vendor" ? ocrResult.merchantName : "";
-          let finalDate = ocrResult.transactionDate || "";
-          let finalTotal = ocrResult.totalAmount && ocrResult.totalAmount > 0 ? ocrResult.totalAmount : 0;
-          let finalTax = ocrResult.taxAmount;
-          let finalTip = 0;
-          let finalCurr = ocrResult.currency || "USD";
-          let finalCat = ocrResult.category || "meals_entertainment";
-          let finalPolicy = ocrResult.policy || "Standard Corporate Travel Policy";
-          let finalPayment = ocrResult.payThrough || "Company Corporate Card";
-          let finalRecNum = ocrResult.receiptNumber || "";
-          let finalDesc = ocrResult.description || "";
-          let finalItems = ocrResult.lineItems || [];
-          let confidence = ocrResult.confidence || 92;
-
-          // Auto AI Refine on client OCR text
-          setOcrProgress({ status: "Refining with Gemini AI...", progress: 0.88 });
-          try {
-            const refined = await travelService.aiRefineReceipt({
-              raw_text: ocrResult.rawText,
-              current_data: {
-                merchant_name: finalMerchant,
-                transaction_date: finalDate,
-                total_amount: finalTotal,
-                currency: finalCurr,
-                expense_category: finalCat,
-                receipt_number: finalRecNum,
-                description: finalDesc,
-                line_items: finalItems,
-              },
-              notes_or_hint: attachmentName,
-            });
-            if (refined) {
-              if (refined.merchant_name) finalMerchant = refined.merchant_name;
-              if (refined.transaction_date) finalDate = refined.transaction_date;
-              if (refined.total_amount && refined.total_amount > 0) finalTotal = refined.total_amount;
-              if (refined.tax_amount !== undefined) finalTax = refined.tax_amount;
-              if (refined.tip_amount !== undefined) finalTip = refined.tip_amount;
-              if (refined.currency) finalCurr = refined.currency;
-              if (refined.expense_category) finalCat = refined.expense_category;
-              if (refined.policy) finalPolicy = refined.policy;
-              if (refined.payment_method) finalPayment = refined.payment_method;
-              if (refined.receipt_number) finalRecNum = refined.receipt_number;
-              if (refined.description) finalDesc = refined.description;
-              if (refined.line_items && refined.line_items.length > 0) finalItems = refined.line_items;
-              confidence = refined.extraction_confidence || 99;
-            }
-          } catch (refineErr) {
-            console.warn("Client fallback AI refine notice:", refineErr);
-          }
-
-          if (finalMerchant) setFormMerchant(finalMerchant);
-          if (finalDate) setFormDate(finalDate);
-          if (finalTotal > 0) setFormSpendAmount(finalTotal);
-          if (finalTax !== undefined) setFormTax(finalTax);
-          if (finalTip) setFormTip(finalTip);
-          if (finalCurr) setFormCurrency(finalCurr);
-          if (finalCat) setFormCategory(finalCat);
-          if (finalPolicy) setFormPolicy(finalPolicy);
-          if (finalPayment) setFormPayThrough(finalPayment);
-          if (finalRecNum) setFormReceiptNum(finalRecNum);
-          if (finalDesc) setFormDescription(finalDesc);
-          if (finalItems.length > 0) setFormLineItems(finalItems);
-          setRawOcrText(ocrResult.rawText);
-          setOcrConfidence(confidence);
-          toast.success(`Extracted & AI-refined with Gemini (${confidence}% confidence)!`);
-          setMobilePane("form");
-          return;
-        } catch (tessErr) {
-          console.error("Tesseract client fallback error:", tessErr);
+          console.warn("AI refine notice:", aiRefineErr);
         }
       }
+
+      if (finalMerchant) setFormMerchant(finalMerchant);
+      if (finalDate) setFormDate(finalDate);
+      if (finalTotal > 0) setFormSpendAmount(finalTotal);
+      if (finalTax !== undefined) setFormTax(finalTax);
+      if (finalTip !== undefined) setFormTip(finalTip);
+      setFormSubtotal(finalSubtotal);
+      setFormDiscount(finalDiscount);
+      setFormNetSubtotal(finalNetSubtotal);
+      setFormCalculationVerified(finalCalculationVerified);
+      setFormDiscountDetails(finalDiscountDetails);
+      if (finalCurr) setFormCurrency(finalCurr);
+      if (finalRate) setFormExchangeRate(finalRate);
+      if (finalCat) setFormCategory(finalCat);
+      if (finalPolicy) setFormPolicy(finalPolicy);
+      if (finalPayment) setFormPayThrough(finalPayment);
+      if (finalRecNum) setFormReceiptNum(finalRecNum);
+      if (finalDesc) setFormDescription(finalDesc);
+      if (finalItems && finalItems.length > 0) setFormLineItems(finalItems);
+      if (finalRawText) setRawOcrText(finalRawText);
+      setOcrConfidence(confidence);
+      toast.success(`Extracted & AI-refined (${confidence}% confidence)!`);
+      setMobilePane("form");
+      return;
+    } catch (err: any) {
+      console.error("Receipt extraction error:", err);
       toast.error("Could not extract receipt automatically. You can enter details manually.");
     } finally {
       setIsOcrRunning(false);
@@ -626,6 +750,11 @@ export default function ReceiptExpensePage() {
       project_code: formProjectCode,
       attendees: formAttendees,
       line_items: formLineItems,
+      subtotal_amount: formSubtotal,
+      discount_amount: formDiscount,
+      net_subtotal: formNetSubtotal,
+      calculation_verified: formCalculationVerified,
+      discount_details: formDiscountDetails,
       file_name: attachmentName || (attachmentDataUrl ? "receipt_scan.jpg" : undefined),
       file_type: attachmentType || (attachmentDataUrl ? "image/jpeg" : undefined),
       file_size_bytes: attachmentSize,
@@ -650,6 +779,11 @@ export default function ReceiptExpensePage() {
     setFormExchangeRate(1.385);
     setFormTax(0);
     setFormTip(0);
+    setFormSubtotal(null);
+    setFormDiscount(0);
+    setFormNetSubtotal(null);
+    setFormCalculationVerified(false);
+    setFormDiscountDetails("");
     setFormDescription("");
     setFormReceiptNum("");
     setFormIsReimbursable(false);
@@ -677,6 +811,11 @@ export default function ReceiptExpensePage() {
     setFormExchangeRate(Number(receipt.exchange_rate) || 1.385);
     setFormTax(Number(receipt.tax_amount) || 0);
     setFormTip(Number(receipt.tip_amount) || 0);
+    setFormSubtotal(receipt.subtotal_amount !== undefined ? receipt.subtotal_amount : (receipt.extraction_metadata?.subtotal_amount ?? null));
+    setFormDiscount(receipt.discount_amount !== undefined ? (Number(receipt.discount_amount) || 0) : (Number(receipt.extraction_metadata?.discount_amount) || 0));
+    setFormNetSubtotal(receipt.net_subtotal !== undefined ? receipt.net_subtotal : (receipt.extraction_metadata?.net_subtotal ?? null));
+    setFormCalculationVerified(Boolean(receipt.calculation_verified ?? receipt.extraction_metadata?.calculation_verified));
+    setFormDiscountDetails(receipt.discount_details || receipt.extraction_metadata?.discount_details || "");
     setFormDescription(receipt.description || receipt.notes || "");
     setFormReceiptNum(receipt.receipt_number || "");
     setFormEventId(receipt.event_id || "");
@@ -721,10 +860,6 @@ export default function ReceiptExpensePage() {
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
               Expenses
             </h1>
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1.5 py-0.5">
-              <Sparkles className="w-3 h-3 text-emerald-500 animate-pulse" />
-              AI & OCR Engine Ready
-            </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground">
             Multi-currency corporate expense management with multimodal AI receipt extraction, real-time CAD conversion, and policy compliance verification.
@@ -780,17 +915,41 @@ export default function ReceiptExpensePage() {
           )}
 
           {activeTab === "list" && (
-            <Button
-              onClick={() => {
-                resetForm();
-                setActiveTab("new_expense");
-              }}
-              size="sm"
-              className="gap-1.5 rounded-xl font-semibold text-xs shadow-xs"
-            >
-              <UploadCloud className="w-4 h-4" />
-              <span>Upload Receipt</span>
-            </Button>
+            <div className="flex items-center gap-2">
+              <input
+                ref={batchFileInputRef}
+                type="file"
+                multiple
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    handleMultipleFilesSelected(e.target.files);
+                    e.target.value = "";
+                  }
+                }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => batchFileInputRef.current?.click()}
+                className="gap-1.5 rounded-xl font-semibold text-xs shadow-xs border-primary/30 hover:border-primary hover:bg-primary/5 text-foreground"
+              >
+                <Layers className="w-4 h-4 text-primary" />
+                <span>Batch Upload (Drafts)</span>
+              </Button>
+              <Button
+                onClick={() => {
+                  resetForm();
+                  setActiveTab("new_expense");
+                }}
+                size="sm"
+                className="gap-1.5 rounded-xl font-semibold text-xs shadow-xs"
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>Upload Receipt</span>
+              </Button>
+            </div>
           )}
         </div>
       </div>
@@ -864,10 +1023,14 @@ export default function ReceiptExpensePage() {
                   <input
                     ref={fileInputRef}
                     type="file"
+                    multiple
                     accept="image/*,application/pdf"
                     className="hidden"
                     onChange={(e) => {
-                      if (e.target.files?.[0]) handleFileSelected(e.target.files[0]);
+                      if (e.target.files && e.target.files.length > 0) {
+                        handleMultipleFilesSelected(e.target.files);
+                        e.target.value = "";
+                      }
                     }}
                   />
                   <input
@@ -884,14 +1047,21 @@ export default function ReceiptExpensePage() {
                   {!attachmentDataUrl ? (
                     <div
                       onClick={() => fileInputRef.current?.click()}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                          handleMultipleFilesSelected(e.dataTransfer.files);
+                        }
+                      }}
                       className="border-2 border-dashed border-border hover:border-primary/60 rounded-xl p-8 text-center cursor-pointer transition-colors bg-muted/10 hover:bg-muted/30 group"
                     >
                       <UploadCloud className="w-10 h-10 text-muted-foreground mx-auto mb-2 group-hover:scale-110 group-hover:text-primary transition-all" />
                       <div className="text-xs font-semibold text-foreground mb-1">
-                        Drag and drop receipt here, or <span className="text-primary underline">browse</span>
+                        Drag and drop receipt(s) here, or <span className="text-primary underline">browse</span>
                       </div>
                       <p className="text-[11px] text-muted-foreground mb-4">
-                        Supports PNG, JPG, WebP, and PDF invoices up to 15MB
+                        Single or batch upload: PNG, JPG, WebP, and PDF invoices (batch saves as Drafts)
                       </p>
                       <div className="flex items-center justify-center gap-2">
                         <Button
@@ -907,6 +1077,19 @@ export default function ReceiptExpensePage() {
                           <Camera className="w-3.5 h-3.5 text-primary" />
                           <span>Use Camera</span>
                         </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                          }}
+                          className="text-xs gap-1.5 border-primary/40 text-primary hover:bg-primary/10"
+                        >
+                          <Layers className="w-3.5 h-3.5" />
+                          <span>Batch Upload (Drafts)</span>
+                        </Button>
                       </div>
                     </div>
                   ) : (
@@ -917,6 +1100,22 @@ export default function ReceiptExpensePage() {
                           {attachmentName}
                         </div>
                         <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => openLightbox(attachmentDataUrl || "", attachmentName, attachmentType)}
+                            className="p-1 hover:bg-muted rounded text-foreground"
+                            title="Fullscreen Preview"
+                          >
+                            <Maximize2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadAttachment(attachmentDataUrl || "", attachmentName)}
+                            className="p-1 hover:bg-muted rounded text-foreground"
+                            title="Download Receipt"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                          </button>
                           <button
                             type="button"
                             onClick={() => setPreviewZoom((z) => Math.max(0.6, z - 0.2))}
@@ -1104,6 +1303,66 @@ export default function ReceiptExpensePage() {
                 </CardHeader>
 
                 <CardContent className="p-4 sm:p-6 space-y-6">
+                  {/* Extracted Receipt Preview Banner (Visible after upload & OCR extraction) */}
+                  {attachmentDataUrl && (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-card border border-primary/20 shadow-xs gap-3 animate-in fade-in duration-200">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          onClick={() => openLightbox(attachmentDataUrl, attachmentName, attachmentType)}
+                          className="w-12 h-12 rounded-lg bg-muted border border-border overflow-hidden shrink-0 cursor-pointer hover:opacity-85 transition-opacity flex items-center justify-center relative group"
+                          title="Click to view full preview"
+                        >
+                          {attachmentType.includes("pdf") ? (
+                            <FileText className="w-6 h-6 text-rose-500" />
+                          ) : (
+                            <img src={attachmentDataUrl} alt="Receipt Thumbnail" className="w-full h-full object-cover" />
+                          )}
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                            <Eye className="w-4 h-4 text-white" />
+                          </div>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-foreground truncate max-w-[200px] sm:max-w-xs">
+                              {attachmentName || "Receipt Attachment"}
+                            </span>
+                            <Badge variant="outline" className="text-[10px] font-mono py-0 px-1.5 uppercase">
+                              {attachmentType.includes("pdf") ? "PDF" : "Image"}
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground mt-0.5">
+                            {attachmentSize > 0 ? `${(attachmentSize / 1024).toFixed(1)} KB • ` : ""}
+                            {ocrConfidence > 0 ? `AI Extracted (${ocrConfidence}% Confidence)` : "Attached Document"}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="xs"
+                          onClick={() => openLightbox(attachmentDataUrl, attachmentName, attachmentType)}
+                          className="text-xs gap-1 h-7 rounded-lg"
+                          title="Open full receipt preview"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Preview</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="xs"
+                          onClick={() => handleDownloadAttachment(attachmentDataUrl, attachmentName)}
+                          className="text-xs gap-1 h-7 rounded-lg"
+                          title="Download original receipt file"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span>Download</span>
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* SECTION 1: CORE ATTRIBUTES (Date, Merchant, Category, Policy) */}
                   <div className="space-y-4">
                     <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 border-b border-border/50 pb-1.5">
@@ -1398,6 +1657,100 @@ export default function ReceiptExpensePage() {
                       </div>
                     </div>
 
+                    {/* Real-time Calculation & Discount Verification Banner */}
+                    {(formDiscount > 0 || formSubtotal !== null || formCalculationVerified) && (
+                      <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 dark:text-emerald-200 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                            <ShieldCheck className="w-4 h-4" />
+                            <span>Real-time Verified Amount & Discount Calculation</span>
+                          </div>
+                          <Badge variant="outline" className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 font-mono">
+                            Verified Total
+                          </Badge>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs pt-1">
+                          <div className="p-2 rounded-lg bg-background/70 border border-border/50">
+                            <span className="text-[10px] text-muted-foreground block">Gross Subtotal</span>
+                            <span className="font-mono font-bold text-foreground">
+                              ${(formSubtotal ?? (formSpendAmount + formDiscount - formTax - formTip)).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="p-2 rounded-lg bg-background/70 border border-emerald-500/40">
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block">Discount Deducted</span>
+                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                              -${formDiscount.toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="p-2 rounded-lg bg-background/70 border border-border/50">
+                            <span className="text-[10px] text-muted-foreground block">Net Subtotal</span>
+                            <span className="font-mono font-bold text-foreground">
+                              ${(formNetSubtotal ?? (formSpendAmount - formTax - formTip)).toFixed(2)}
+                            </span>
+                          </div>
+                          <div className="p-2 rounded-lg bg-background/70 border border-primary/40">
+                            <span className="text-[10px] text-primary font-semibold block">Final Verified Total</span>
+                            <span className="font-mono font-bold text-primary">
+                              ${formSpendAmount.toFixed(2)} {formCurrency}
+                            </span>
+                          </div>
+                        </div>
+
+                        {formDiscountDetails && (
+                          <p className="text-[11px] text-muted-foreground font-mono italic pt-0.5">
+                            {formDiscountDetails}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Gross Subtotal & Discount Inputs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs font-semibold text-foreground block mb-1">
+                          Gross Subtotal (Pre-Discount)
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formSubtotal ?? ""}
+                          onChange={(e) => {
+                            const val = e.target.value === "" ? null : parseFloat(e.target.value) || 0;
+                            setFormSubtotal(val);
+                            if (val !== null && val > 0) {
+                              const net = Math.max(val - formDiscount, 0);
+                              setFormNetSubtotal(net);
+                              setFormSpendAmount(Number((net + formTax + formTip).toFixed(2)));
+                            }
+                          }}
+                          placeholder="e.g. 76.50"
+                          className="h-9 text-xs rounded-lg font-mono"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs font-semibold text-foreground block mb-1">
+                          Discount Total / Promos / Comps
+                        </Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formDiscount || ""}
+                          onChange={(e) => {
+                            const disc = parseFloat(e.target.value) || 0;
+                            setFormDiscount(disc);
+                            if (formSubtotal !== null && formSubtotal > 0) {
+                              const net = Math.max(formSubtotal - disc, 0);
+                              setFormNetSubtotal(net);
+                              setFormSpendAmount(Number((net + formTax + formTip).toFixed(2)));
+                            }
+                          }}
+                          placeholder="0.00"
+                          className="h-9 text-xs rounded-lg font-mono text-emerald-600 dark:text-emerald-400 font-medium"
+                        />
+                      </div>
+                    </div>
+
                     {/* Tax & Tip Details */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
@@ -1408,7 +1761,13 @@ export default function ReceiptExpensePage() {
                           type="number"
                           step="0.01"
                           value={formTax || ""}
-                          onChange={(e) => setFormTax(parseFloat(e.target.value) || 0)}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setFormTax(val);
+                            if (formNetSubtotal !== null && formNetSubtotal > 0) {
+                              setFormSpendAmount(Number((formNetSubtotal + val + formTip).toFixed(2)));
+                            }
+                          }}
                           placeholder="0.00"
                           className="h-9 text-xs rounded-lg font-mono"
                         />
@@ -1421,7 +1780,13 @@ export default function ReceiptExpensePage() {
                           type="number"
                           step="0.01"
                           value={formTip || ""}
-                          onChange={(e) => setFormTip(parseFloat(e.target.value) || 0)}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setFormTip(val);
+                            if (formNetSubtotal !== null && formNetSubtotal > 0) {
+                              setFormSpendAmount(Number((formNetSubtotal + formTax + val).toFixed(2)));
+                            }
+                          }}
                           placeholder="0.00"
                           className="h-9 text-xs rounded-lg font-mono"
                         />
@@ -1861,6 +2226,7 @@ export default function ReceiptExpensePage() {
                         <th className="p-3 whitespace-nowrap min-w-[160px]">Pay Through</th>
                         <th className="p-3 text-right whitespace-nowrap min-w-[140px]">Amount</th>
                         <th className="p-3 text-right whitespace-nowrap min-w-[150px]">To Be Reimbursed</th>
+                        <th className="p-3 text-center whitespace-nowrap min-w-[120px]">Attachment</th>
                         <th className="p-3 text-center whitespace-nowrap min-w-[130px]">Status</th>
                       </tr>
                     </thead>
@@ -1872,6 +2238,7 @@ export default function ReceiptExpensePage() {
                         };
                         const CatIcon = catMeta.icon;
                         const cadVal = rec.amount_cad || (Number(rec.total_amount) * (Number(rec.exchange_rate) || 1.385));
+                        const hasAttachment = Boolean(rec.file_data || rec.file_name);
 
                         return (
                           <tr
@@ -1882,13 +2249,8 @@ export default function ReceiptExpensePage() {
                           >
                             {/* Date & Merchant */}
                             <td className="p-3 whitespace-nowrap min-w-[240px]">
-                              <div className="font-bold text-foreground text-sm flex items-center gap-1.5 whitespace-nowrap group-hover:text-primary transition-colors">
+                              <div className="font-bold text-foreground text-sm whitespace-nowrap group-hover:text-primary transition-colors">
                                 <span className="whitespace-nowrap">{rec.merchant_name}</span>
-                                {rec.extraction_confidence && Number(rec.extraction_confidence) >= 95 && (
-                                  <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 px-1 py-0 whitespace-nowrap">
-                                    OCR
-                                  </Badge>
-                                )}
                               </div>
                               <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5 whitespace-nowrap">
                                 <span className="whitespace-nowrap font-medium">{rec.transaction_date ? String(rec.transaction_date).split("T")[0] : ""}</span>
@@ -1948,6 +2310,37 @@ export default function ReceiptExpensePage() {
                                   <span className="font-mono text-muted-foreground text-xs">$0.00 CAD</span>
                                   <span className="text-[10px] text-muted-foreground block">Direct Corp Card</span>
                                 </div>
+                              )}
+                            </td>
+
+                            {/* Attachment Quick View & Download */}
+                            <td className="p-3 text-center whitespace-nowrap min-w-[120px]">
+                              {hasAttachment ? (
+                                <div className="inline-flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                  <Button
+                                    variant="outline"
+                                    size="xs"
+                                    onClick={() => openLightbox(rec.file_data || "", rec.file_name || "receipt", rec.file_type || "image/jpeg")}
+                                    className="h-7 px-2 text-xs gap-1 font-semibold rounded-lg text-primary border-primary/20 bg-primary/5 hover:bg-primary/15"
+                                    title={`View ${rec.file_name || "Receipt Attachment"}`}
+                                  >
+                                    <Paperclip className="w-3.5 h-3.5" />
+                                    <span className="font-mono text-[10px] uppercase">
+                                      {rec.file_type?.includes("pdf") ? "PDF" : "IMG"}
+                                    </span>
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="xs"
+                                    onClick={() => handleDownloadAttachment(rec.file_data || "", rec.file_name || "receipt", rec.id)}
+                                    className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground rounded-lg"
+                                    title="Download Receipt Attachment"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-muted-foreground/60">—</span>
                               )}
                             </td>
 
@@ -2058,6 +2451,20 @@ export default function ReceiptExpensePage() {
                             {rec.payment_method}
                           </span>
                           <div className="flex gap-2">
+                            {rec.file_data && (
+                              <Button
+                                variant="outline"
+                                size="xs"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openLightbox(rec.file_data || "", rec.file_name || "receipt", rec.file_type || "image/jpeg");
+                                }}
+                                className="text-xs h-7 gap-1"
+                              >
+                                <Paperclip className="w-3 h-3 text-primary" />
+                                <span>Receipt</span>
+                              </Button>
+                            )}
                             <Button
                               variant="secondary"
                               size="xs"
@@ -2084,6 +2491,9 @@ export default function ReceiptExpensePage() {
       {/* ===================== EXPENSE DETAIL MODAL ===================== */}
       <Dialog open={Boolean(selectedReceiptDetail)} onOpenChange={() => setSelectedReceiptDetail(null)}>
         <DialogContent className="sm:max-w-4xl lg:max-w-5xl w-full max-h-[92vh] overflow-y-auto p-6">
+          {!selectedReceiptDetail && (
+            <DialogTitle className="sr-only">Expense Details</DialogTitle>
+          )}
           {selectedReceiptDetail && (
             <div className="space-y-6">
               <DialogHeader>
@@ -2116,40 +2526,150 @@ export default function ReceiptExpensePage() {
                 </div>
               </DialogHeader>
 
-              {/* Two Column Layout if receipt document exists */}
-              <div className={`grid grid-cols-1 ${selectedReceiptDetail.file_data ? "lg:grid-cols-12 gap-6" : "gap-5"}`}>
-                {/* Left Column: Receipt Document Preview */}
-                {selectedReceiptDetail.file_data && (
-                  <div className="lg:col-span-5 space-y-2">
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+              {/* Hidden file input for attaching a receipt to an existing expense */}
+              <input
+                ref={detailFileInputRef}
+                type="file"
+                accept="image/*,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.[0]) handleAttachReceiptToExisting(e.target.files[0]);
+                }}
+              />
+
+              {/* Two Column Layout for Receipt Document Attachment + Expense Details */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Left Column: Receipt Document Attachment with View & Download */}
+                <div className="lg:col-span-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                      <Paperclip className="w-3.5 h-3.5 text-primary" />
                       <span>Receipt Attachment</span>
-                      {selectedReceiptDetail.file_type && (
-                        <span className="text-[10px] font-mono lowercase bg-muted px-1.5 py-0.5 rounded">
-                          {selectedReceiptDetail.file_type.split("/")[1] || selectedReceiptDetail.file_type}
-                        </span>
-                      )}
-                    </div>
-                    <div className="w-full h-80 lg:h-[460px] bg-neutral-900 rounded-2xl overflow-hidden flex items-center justify-center border border-border p-2">
-                      {selectedReceiptDetail.file_type?.includes("pdf") ? (
-                        <iframe
-                          src={selectedReceiptDetail.file_data}
-                          className="w-full h-full rounded-xl border-0"
-                          title="Folio Document"
-                        />
-                      ) : (
-                        <img
-                          src={
-                            selectedReceiptDetail.file_data.startsWith("data:") || selectedReceiptDetail.file_data.startsWith("http")
-                              ? selectedReceiptDetail.file_data
-                              : `data:${selectedReceiptDetail.file_type || "image/jpeg"};base64,${selectedReceiptDetail.file_data}`
-                          }
-                          alt={selectedReceiptDetail.merchant_name}
-                          className="max-h-full max-w-full object-contain rounded-lg"
-                        />
-                      )}
-                    </div>
+                    </span>
+                    {selectedReceiptDetail.file_type && (
+                      <Badge variant="outline" className="text-[10px] font-mono uppercase bg-muted/60">
+                        {selectedReceiptDetail.file_type.includes("pdf") ? "PDF" : "Image"}
+                      </Badge>
+                    )}
                   </div>
-                )}
+
+                  {selectedReceiptDetail.file_data ? (
+                    <div className="space-y-2.5">
+                      {/* Attachment Info & Action Strip */}
+                      <div className="flex items-center justify-between p-2.5 rounded-xl bg-card border border-border text-xs gap-2">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-foreground truncate text-xs" title={selectedReceiptDetail.file_name || "receipt"}>
+                            {selectedReceiptDetail.file_name || "Attached Receipt Document"}
+                          </div>
+                          {selectedReceiptDetail.file_size_bytes && selectedReceiptDetail.file_size_bytes > 0 && (
+                            <span className="text-[10px] text-muted-foreground font-mono">
+                              {(selectedReceiptDetail.file_size_bytes / 1024).toFixed(1)} KB
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="xs"
+                            onClick={() =>
+                              openLightbox(
+                                selectedReceiptDetail.file_data || "",
+                                selectedReceiptDetail.file_name || "receipt",
+                                selectedReceiptDetail.file_type || "image/jpeg"
+                              )
+                            }
+                            className="h-7 px-2 text-xs gap-1 rounded-lg"
+                            title="Fullscreen View"
+                          >
+                            <Maximize2 className="w-3 h-3" />
+                            <span>View</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="xs"
+                            onClick={() =>
+                              handleDownloadAttachment(
+                                selectedReceiptDetail.file_data || "",
+                                selectedReceiptDetail.file_name || "receipt",
+                                selectedReceiptDetail.id
+                              )
+                            }
+                            className="h-7 px-2 text-xs gap-1 rounded-lg font-semibold"
+                            title="Download Receipt File"
+                          >
+                            <Download className="w-3 h-3" />
+                            <span>Download</span>
+                          </Button>
+                        </div>
+                      </div>
+
+                      {/* Document Viewer Frame */}
+                      <div
+                        onClick={() =>
+                          openLightbox(
+                            selectedReceiptDetail.file_data || "",
+                            selectedReceiptDetail.file_name || "receipt",
+                            selectedReceiptDetail.file_type || "image/jpeg"
+                          )
+                        }
+                        className="w-full h-72 sm:h-80 lg:h-[420px] bg-neutral-900 rounded-2xl overflow-hidden flex items-center justify-center border border-border p-2 cursor-pointer group relative"
+                        title="Click to view fullscreen preview"
+                      >
+                        {selectedReceiptDetail.file_type?.includes("pdf") ? (
+                          <div className="w-full h-full relative">
+                            <iframe
+                              src={selectedReceiptDetail.file_data}
+                              className="w-full h-full rounded-xl border-0 pointer-events-none"
+                              title="Receipt Document"
+                            />
+                            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 flex items-center justify-center transition-colors">
+                              <span className="px-3 py-1.5 rounded-xl bg-background/90 text-foreground text-xs font-semibold shadow-md flex items-center gap-1.5 opacity-90 group-hover:opacity-100">
+                                <Maximize2 className="w-3.5 h-3.5 text-primary" />
+                                <span>Click to View Fullscreen PDF</span>
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center relative">
+                            <img
+                              src={
+                                selectedReceiptDetail.file_data.startsWith("data:") || selectedReceiptDetail.file_data.startsWith("http")
+                                  ? selectedReceiptDetail.file_data
+                                  : `data:${selectedReceiptDetail.file_type || "image/jpeg"};base64,${selectedReceiptDetail.file_data}`
+                              }
+                              alt={selectedReceiptDetail.merchant_name}
+                              className="max-h-full max-w-full object-contain rounded-lg transition-transform group-hover:scale-[1.02]"
+                            />
+                            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity rounded-xl">
+                              <span className="px-3 py-1.5 rounded-xl bg-background/90 text-foreground text-xs font-semibold shadow-md flex items-center gap-1.5">
+                                <Eye className="w-3.5 h-3.5 text-primary" />
+                                <span>Click to Expand Lightbox</span>
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Empty Attachment State with Quick Attach Action */
+                    <div
+                      onClick={() => detailFileInputRef.current?.click()}
+                      className="w-full h-48 sm:h-64 border-2 border-dashed border-border hover:border-primary/60 rounded-2xl p-6 text-center cursor-pointer transition-colors bg-muted/10 hover:bg-muted/20 flex flex-col items-center justify-center group"
+                    >
+                      <UploadCloud className="w-8 h-8 text-muted-foreground group-hover:text-primary group-hover:scale-110 transition-all mb-2" />
+                      <div className="text-xs font-semibold text-foreground">No Receipt Attached</div>
+                      <p className="text-[11px] text-muted-foreground mt-1 mb-3 max-w-[220px]">
+                        Attach receipt image or PDF to support expense compliance & auditing.
+                      </p>
+                      <Button type="button" variant="outline" size="xs" className="text-xs gap-1.5">
+                        <Paperclip className="w-3.5 h-3.5" />
+                        <span>Upload & Attach Receipt</span>
+                      </Button>
+                    </div>
+                  )}
+                </div>
 
                 {/* Right Column: Key Details & Itemization */}
                 <div className={`${selectedReceiptDetail.file_data ? "lg:col-span-7" : "col-span-1"} space-y-4`}>
@@ -2217,6 +2737,50 @@ export default function ReceiptExpensePage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Real-time Calculation & Discount Verification in Detail View */}
+                  {((selectedReceiptDetail.discount_amount && Number(selectedReceiptDetail.discount_amount) > 0) ||
+                    selectedReceiptDetail.calculation_verified ||
+                    selectedReceiptDetail.extraction_metadata?.discount_amount) && (
+                    <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-2">
+                      <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
+                        <span className="flex items-center gap-1.5">
+                          <ShieldCheck className="w-4 h-4" />
+                          Real-time Verified Amount & Discount Audit
+                        </span>
+                        <Badge variant="outline" className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 font-mono">
+                          Calculation Verified
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 font-mono text-xs pt-1">
+                        <div className="p-2 rounded-lg bg-background/70 border border-border/50">
+                          <span className="text-[10px] text-muted-foreground block font-sans">Gross Subtotal</span>
+                          <span className="font-bold text-foreground">
+                            ${(Number(selectedReceiptDetail.subtotal_amount) || Number(selectedReceiptDetail.extraction_metadata?.subtotal_amount) || (Number(selectedReceiptDetail.total_amount) + Number(selectedReceiptDetail.discount_amount || 0) - Number(selectedReceiptDetail.tax_amount || 0))).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-background/70 border border-emerald-500/40">
+                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-sans font-semibold">Discount Deducted</span>
+                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                            -${(Number(selectedReceiptDetail.discount_amount) || Number(selectedReceiptDetail.extraction_metadata?.discount_amount) || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="p-2 rounded-lg bg-background/70 border border-border/50">
+                          <span className="text-[10px] text-muted-foreground block font-sans">Net Subtotal</span>
+                          <span className="font-bold text-foreground">
+                            ${(Number(selectedReceiptDetail.net_subtotal) || Number(selectedReceiptDetail.extraction_metadata?.net_subtotal) || (Number(selectedReceiptDetail.total_amount) - Number(selectedReceiptDetail.tax_amount || 0))).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {(selectedReceiptDetail.discount_details || selectedReceiptDetail.extraction_metadata?.discount_details) && (
+                        <p className="text-[11px] text-muted-foreground font-mono italic">
+                          {selectedReceiptDetail.discount_details || selectedReceiptDetail.extraction_metadata?.discount_details}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Description / Business Purpose */}
                   {selectedReceiptDetail.description && (
@@ -2288,6 +2852,295 @@ export default function ReceiptExpensePage() {
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      {/* ===================== FULLSCREEN LIGHTBOX / PREVIEW MODAL ===================== */}
+      <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
+        <DialogContent className="sm:max-w-4xl lg:max-w-5xl w-full max-h-[92vh] overflow-hidden p-0 flex flex-col bg-neutral-950 border-neutral-800 text-white">
+          <DialogDescription className="sr-only">Receipt preview and attachment viewer</DialogDescription>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/90 shrink-0">
+            <div className="flex items-center gap-2.5 truncate mr-3">
+              <FileText className="w-4 h-4 text-primary shrink-0" />
+              <DialogTitle className="font-semibold text-xs sm:text-sm truncate text-white">
+                {lightboxName || "Receipt Preview"}
+              </DialogTitle>
+              <Badge variant="outline" className="text-[10px] uppercase font-mono border-neutral-700 bg-neutral-800 text-neutral-300">
+                {lightboxType.includes("pdf") ? "PDF" : "Image"}
+              </Badge>
+            </div>
+
+            <div className="flex items-center gap-1.5 shrink-0">
+              {!lightboxType.includes("pdf") && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setLightboxZoom((z) => Math.max(0.5, z - 0.25))}
+                    className="h-7 w-7 p-0 text-neutral-300 hover:text-white hover:bg-neutral-800"
+                    title="Zoom Out"
+                  >
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </Button>
+                  <span className="text-[11px] font-mono px-1 text-neutral-400">
+                    {Math.round(lightboxZoom * 100)}%
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setLightboxZoom((z) => Math.min(3.0, z + 0.25))}
+                    className="h-7 w-7 p-0 text-neutral-300 hover:text-white hover:bg-neutral-800"
+                    title="Zoom In"
+                  >
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setLightboxRotate((r) => (r + 90) % 360)}
+                    className="h-7 w-7 p-0 text-neutral-300 hover:text-white hover:bg-neutral-800"
+                    title="Rotate 90deg"
+                  >
+                    <RotateCw className="w-3.5 h-3.5" />
+                  </Button>
+                </>
+              )}
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => handleDownloadAttachment(lightboxSrc, lightboxName)}
+                className="h-7 px-2.5 text-xs gap-1.5 border-neutral-700 bg-neutral-800 text-neutral-200 hover:bg-neutral-700 hover:text-white"
+                title="Download file"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Download</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setLightboxOpen(false)}
+                className="h-7 w-7 p-0 text-neutral-400 hover:text-white hover:bg-neutral-800"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex-1 w-full h-[65vh] sm:h-[75vh] overflow-auto flex items-center justify-center p-4 bg-neutral-950">
+            {lightboxType.includes("pdf") ? (
+              <iframe
+                src={lightboxSrc}
+                title="PDF Document Preview"
+                className="w-full h-full border-0 rounded-lg bg-neutral-900"
+              />
+            ) : (
+              <img
+                src={lightboxSrc}
+                alt={lightboxName}
+                style={{
+                  transform: `scale(${lightboxZoom}) rotate(${lightboxRotate}deg)`,
+                  transition: "transform 0.15s ease-out",
+                }}
+                className="max-h-full max-w-full object-contain rounded-lg shadow-2xl select-none"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===================== BATCH PROCESSING PROGRESS MODAL ===================== */}
+      <Dialog open={isBatchProcessing} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md text-center p-6 space-y-4">
+          <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center animate-pulse">
+            <Layers className="w-6 h-6 text-primary animate-spin" />
+          </div>
+          <div className="space-y-1">
+            <DialogTitle className="text-base font-bold">
+              Extracting Receipts with AI Vision
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              {batchProgressText || `Analyzing ${batchFileCount} uploaded receipts concurrently...`}
+            </DialogDescription>
+          </div>
+          <div className="p-3 bg-muted/40 rounded-xl border border-border text-xs text-muted-foreground flex items-center justify-center gap-2">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <span>All extracted expenses will be automatically saved with <strong>Draft</strong> status.</span>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===================== BATCH EXTRACTION RESULTS MODAL ===================== */}
+      <Dialog open={isBatchModalOpen} onOpenChange={setIsBatchModalOpen}>
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] flex flex-col p-0 overflow-hidden">
+          <DialogHeader className="p-5 pb-3 border-b border-border bg-card">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-500">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                </div>
+                <div>
+                  <DialogTitle className="text-base font-bold flex items-center gap-2">
+                    Batch Receipts Extracted
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/30 text-[11px]">
+                      {batchCreatedDrafts.length} Saved as Draft
+                    </Badge>
+                  </DialogTitle>
+                  <DialogDescription className="text-xs text-muted-foreground">
+                    Multiple receipts were processed with AI vision. Review your newly created Draft expenses below.
+                  </DialogDescription>
+                </div>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {/* List of Extracted Drafts */}
+          <div className="p-5 overflow-y-auto space-y-3 flex-1 bg-muted/10">
+            {batchCreatedDrafts.length === 0 ? (
+              <div className="text-center py-8 text-xs text-muted-foreground">
+                No receipts were successfully extracted in this batch.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {batchCreatedDrafts.map((rec) => {
+                  const catMeta = EXPENSE_CATEGORIES.find((c) => c.value === rec.expense_category) || {
+                    label: rec.expense_category,
+                    icon: Layers,
+                  };
+                  const CatIcon = catMeta.icon;
+                  return (
+                    <div
+                      key={rec.id}
+                      className="p-3.5 rounded-xl border border-border bg-card hover:border-primary/40 transition-all flex flex-col justify-between gap-3 shadow-xs"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-start gap-2.5">
+                          {rec.file_data ? (
+                            <div
+                              onClick={() => openLightbox(rec.file_data || "", rec.file_name || "receipt", rec.file_type || "")}
+                              className="w-12 h-12 rounded-lg border border-border overflow-hidden bg-muted/40 cursor-pointer shrink-0 hover:opacity-80 transition-opacity"
+                            >
+                              <img src={rec.file_data} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg border border-border bg-muted/40 flex items-center justify-center shrink-0 text-muted-foreground">
+                              <Receipt className="w-5 h-5" />
+                            </div>
+                          )}
+                          <div className="space-y-0.5">
+                            <div className="font-bold text-xs text-foreground truncate max-w-[160px]">
+                              {rec.merchant_name || "Unknown Merchant"}
+                            </div>
+                            <div className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                              <Clock className="w-3 h-3 text-muted-foreground" />
+                              <span>{rec.transaction_date || "No date"}</span>
+                              {rec.receipt_number && (
+                                <span className="font-mono text-[10px] text-muted-foreground">· {rec.receipt_number}</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 mt-1">
+                              <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0">
+                                <CatIcon className="w-3 h-3 text-primary" />
+                                <span>{catMeta.label}</span>
+                              </Badge>
+                              <Badge className="bg-amber-500/15 text-amber-500 border border-amber-500/30 text-[10px] px-1.5 py-0 font-medium">
+                                Draft
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <div className="font-bold text-sm text-foreground">
+                            ${Number(rec.total_amount).toFixed(2)}{" "}
+                            <span className="text-[10px] font-semibold text-muted-foreground">{rec.currency}</span>
+                          </div>
+                          {rec.currency !== "CAD" && (
+                            <div className="text-[10px] text-muted-foreground font-mono">
+                              ≈ ${Number(rec.amount_cad || 0).toFixed(2)} CAD
+                            </div>
+                          )}
+                          {((rec.discount_amount && Number(rec.discount_amount) > 0) || (rec.extraction_metadata?.discount_amount && Number(rec.extraction_metadata?.discount_amount) > 0)) && (
+                            <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-mono font-medium">
+                              Disc: -${Number(rec.discount_amount || rec.extraction_metadata?.discount_amount || 0).toFixed(2)}
+                            </div>
+                          )}
+                          {rec.tax_amount > 0 && (
+                            <div className="text-[10px] text-muted-foreground font-mono">
+                              Tax: ${Number(rec.tax_amount).toFixed(2)}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-2 border-t border-border/60 text-xs">
+                        <span className="text-[11px] text-muted-foreground">
+                          {rec.line_items?.length || 0} line item{rec.line_items?.length === 1 ? "" : "s"}
+                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => {
+                              setIsBatchModalOpen(false);
+                              setSelectedReceiptDetail(rec);
+                            }}
+                            className="h-7 text-xs gap-1 text-primary hover:bg-primary/10"
+                          >
+                            <Eye className="w-3 h-3" />
+                            <span>View / Edit</span>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {batchErrors.length > 0 && (
+              <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl space-y-1 text-xs">
+                <div className="font-semibold text-destructive flex items-center gap-1.5">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Some files could not be extracted ({batchErrors.length}):</span>
+                </div>
+                <ul className="list-disc list-inside text-muted-foreground text-[11px] space-y-0.5">
+                  {batchErrors.map((err, idx) => (
+                    <li key={idx}>
+                      <span className="font-medium text-foreground">{err.file_name}</span>: {err.error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="p-4 border-t border-border bg-card flex flex-col sm:flex-row items-center justify-between gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                batchFileInputRef.current?.click();
+              }}
+              className="text-xs gap-1.5 w-full sm:w-auto"
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>Upload More Receipts</span>
+            </Button>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Button
+                size="sm"
+                onClick={() => {
+                  setStatusFilter("draft");
+                  setActiveTab("list");
+                  setIsBatchModalOpen(false);
+                }}
+                className="text-xs gap-1.5 w-full sm:w-auto font-semibold"
+              >
+                <span>View All Draft Expenses</span>
+                <ArrowLeft className="w-3.5 h-3.5 rotate-180" />
+              </Button>
+            </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -246,6 +246,11 @@ export const apiClient = {
   
   async post<T>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<T> {
     const isFormData = body instanceof FormData;
+    const customHeaders = { ...(options?.headers as Record<string, string>) };
+    if (isFormData) {
+      delete customHeaders["Content-Type"];
+      delete customHeaders["content-type"];
+    }
     const res = await monitoredFetch(endpoint, {
       ...options,
       method: "POST",
@@ -253,7 +258,7 @@ export const apiClient = {
       headers: {
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...getAuthHeaders(),
-        ...(options?.headers as Record<string, string>),
+        ...customHeaders,
       } as HeadersInit,
       body: isFormData ? body : JSON.stringify(body),
     });
@@ -276,16 +281,22 @@ export const apiClient = {
   },
   
   async put<T>(endpoint: string, body?: unknown, options?: ApiRequestOptions): Promise<T> {
+    const isFormData = body instanceof FormData;
+    const customHeaders = { ...(options?.headers as Record<string, string>) };
+    if (isFormData) {
+      delete customHeaders["Content-Type"];
+      delete customHeaders["content-type"];
+    }
     const res = await monitoredFetch(endpoint, {
       ...options,
       method: "PUT",
       credentials: "include",
       headers: {
-        "Content-Type": "application/json",
+        ...(isFormData ? {} : { "Content-Type": "application/json" }),
         ...getAuthHeaders(),
-        ...(options?.headers as Record<string, string>),
+        ...customHeaders,
       } as HeadersInit,
-      body: JSON.stringify(body),
+      body: isFormData ? body : JSON.stringify(body),
     });
     return handleResponse<T>(res);
   },

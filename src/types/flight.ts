@@ -52,6 +52,7 @@ export interface FlightSearchResultItem {
   booking_provider: string;
   provider_price?: number;
   booking_url: string;
+  flight_category?: string;
   source: string;
   collected_at: string;
   completeness: string;

@@ -344,7 +344,29 @@ export function FlightCard({
               <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">
                 {flight.trip_type === "round_trip" ? "Round trip total" : "One-way total"}
               </p>
-              <div className="flex items-center gap-1.5 mt-1 lg:justify-end">
+              <div className="flex items-center gap-1.5 mt-1 lg:justify-end flex-wrap">
+                {flight.flight_category ? (
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] font-semibold gap-1 ${
+                      flight.flight_category.toLowerCase().includes("top")
+                        ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                        : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/30"
+                    }`}
+                  >
+                    {flight.flight_category.toLowerCase().includes("top") ? (
+                      <>
+                        <Sparkles className="w-2.5 h-2.5 text-amber-500" />
+                        Top Flight
+                      </>
+                    ) : (
+                      <>
+                        <Plane className="w-2.5 h-2.5 text-slate-500" />
+                        Other Flight
+                      </>
+                    )}
+                  </Badge>
+                ) : null}
                 <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-medium">
                   Live Google Fare
                 </Badge>

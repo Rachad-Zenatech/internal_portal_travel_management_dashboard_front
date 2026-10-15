@@ -326,12 +326,15 @@ export interface AiChatResponse {
   assistant_name: string;
   executive_target: string;
   latest_bot_reply: string;
+  model_thinking?: string;
+  flights?: import("./flight").FlightSearchResultItem[];
   itinerary_options: AiItineraryOption[];
   messages: Array<{
     id: string;
     conversation_id: string;
     sender: "assistant" | "bot";
     message_text: string;
+    model_thinking?: string;
     itinerary_payload?: any;
     created_at: string;
   }>;
@@ -490,6 +493,11 @@ export interface TravelReceipt {
   total_amount: number;
   tax_amount: number;
   tip_amount: number;
+  subtotal_amount?: number | null;
+  discount_amount?: number | null;
+  net_subtotal?: number | null;
+  calculation_verified?: boolean;
+  discount_details?: string | null;
   currency: string;
   expense_category: "flight" | "lodging" | "ground_transport" | "meals_entertainment" | "drone_gear_cargo" | "fuel" | "equipment_supplies" | "other" | string;
   payment_method: string;
@@ -523,6 +531,11 @@ export interface ReceiptExtractionResult {
   total_amount: number;
   tax_amount: number;
   tip_amount: number;
+  subtotal_amount?: number | null;
+  discount_amount?: number | null;
+  net_subtotal?: number | null;
+  calculation_verified?: boolean;
+  discount_details?: string | null;
   currency: string;
   expense_category: string;
   payment_method: string;
@@ -557,6 +570,14 @@ export interface ReceiptStatsSummary {
 export interface ReceiptsApiResponse {
   receipts: TravelReceipt[];
   stats: ReceiptStatsSummary;
+}
+
+export interface BatchReceiptUploadResponse {
+  total: number;
+  success_count: number;
+  failed_count: number;
+  items: TravelReceipt[];
+  errors: Array<{ file_name: string; error: string }>;
 }
 
 export interface CurrencyOption {

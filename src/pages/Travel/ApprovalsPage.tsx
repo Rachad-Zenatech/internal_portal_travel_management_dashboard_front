@@ -26,10 +26,35 @@ import { Textarea } from "@/components/ui/textarea";
 import { travelService } from "@/services/travelService";
 import { useAuth } from "@/lib/AuthContext";
 
+export const formatHumanCategory = (category?: string): string => {
+  if (!category) return "General Expense";
+  const catMap: Record<string, string> = {
+    meals_entertainment: "Meals & Entertainment",
+    flight: "Air Travel",
+    lodging: "Hotel & Lodging",
+    ground_transport: "Ground Transportation",
+    fuel: "Fuel & Fleet Mileage",
+    drone_gear_cargo: "Drone Hardware & Cargo",
+    equipment_supplies: "Office & Field Supplies",
+    other: "Miscellaneous Expense",
+  };
+  const key = String(category).toLowerCase().trim();
+  return catMap[key] || key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+export const SOURCE_TYPE_LABELS: Record<string, string> = {
+  expense: "Expense",
+  stipend: "Per Diem / Stipend",
+  booking: "Flight Booking",
+  cargo: "Drone Cargo",
+};
+
 // Generic Approval Item representation unifying all travel approval workflows
 export interface ApprovalItem {
   id: string;
   sourceType: "expense" | "stipend" | "booking" | "cargo";
+  sourceTypeLabel?: string;
+  categoryLabel?: string;
   referenceNumber: string;
   title: string;
   requesterName: string;
@@ -104,12 +129,15 @@ export default function ApprovalsPage() {
     receipts.forEach((r) => {
       const cad = Number(r.amount_cad || (Number(r.total_amount) * (Number(r.exchange_rate) || 1.385)));
       const isCompliant = !(r.expense_category === "meals_entertainment" && cad > 150) && !(r.expense_category === "flight" && cad > 3500);
+      const catLabel = formatHumanCategory(r.expense_category);
 
       items.push({
         id: `exp-${r.id}`,
         sourceType: "expense",
+        sourceTypeLabel: "Expense",
+        categoryLabel: catLabel,
         referenceNumber: r.receipt_number || `EXP-${r.id.slice(0, 8).toUpperCase()}`,
-        title: `${r.merchant_name} (${r.expense_category})`,
+        title: r.merchant_name || "Business Expense",
         requesterName: r.user_name || r.user_email || "Alex Rivera",
         requesterEmail: r.user_email || "alex.rivera@zenatech.com",
         eventName: r.event_title || "General Corporate Travel",
@@ -394,8 +422,13 @@ export default function ApprovalsPage() {
                             <Plane className="w-5 h-5" />
                           )}
                         </span>
-                        <CardTitle className="text-lg font-bold text-foreground">
-                          {selectedApproval.title}
+                        <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2 flex-wrap">
+                          <span>{selectedApproval.title}</span>
+                          {selectedApproval.categoryLabel && (
+                            <Badge variant="outline" className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border-primary/20">
+                              {selectedApproval.categoryLabel}
+                            </Badge>
+                          )}
                         </CardTitle>
                       </div>
                       <CardDescription className="text-xs text-muted-foreground">
@@ -446,7 +479,7 @@ export default function ApprovalsPage() {
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
                     <div className="p-3 rounded-lg bg-muted/30 border border-border">
                       <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Category</span>
-                      <span className="font-semibold capitalize text-foreground">{selectedApproval.sourceType}</span>
+                      <span className="font-semibold text-foreground">{selectedApproval.categoryLabel || selectedApproval.sourceTypeLabel || selectedApproval.sourceType}</span>
                     </div>
                     <div className="p-3 rounded-lg bg-muted/30 border border-border">
                       <span className="text-[10px] text-muted-foreground font-semibold uppercase block">Payment Method</span>
@@ -762,22 +795,29 @@ export default function ApprovalsPage() {
                             ) : (
                               <Plane className="w-3.5 h-3.5 text-sky-500" />
                             )}
-                            <span className="capitalize">{item.sourceType}</span>
+                            <span>{item.sourceTypeLabel || item.sourceType}</span>
                           </span>
                         </td>
 
                         {/* Item & Reference */}
-                        <td className="p-3 whitespace-nowrap min-w-[240px]">
-                          <div className="font-bold text-foreground text-sm group-hover:text-primary transition-colors flex items-center gap-1.5">
+                        <td className="p-3 whitespace-nowrap min-w-[260px]">
+                          <div className="font-bold text-foreground text-sm group-hover:text-primary transition-colors flex items-center gap-2">
                             <span>{item.title}</span>
+                            {item.categoryLabel && (
+                              <span className="text-[11px] font-semibold text-muted-foreground px-2 py-0.5 rounded-md bg-muted/60 border border-border/60">
+                                {item.categoryLabel}
+                              </span>
+                            )}
                             {!item.policyCompliant && (
                               <span title="Policy Alert">
                                 <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
                               </span>
                             )}
                           </div>
-                          <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                            {item.referenceNumber} • {item.submittedAt.split("T")[0]}
+                          <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5 font-sans">
+                            <span className="font-mono text-muted-foreground/80">{item.referenceNumber}</span>
+                            <span>•</span>
+                            <span>{item.submittedAt ? item.submittedAt.split("T")[0] : ""}</span>
                           </div>
                         </td>
 
@@ -842,7 +882,13 @@ export default function ApprovalsPage() {
                                 : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold"
                             }`}
                           >
-                            {item.status === "pending_approval" ? "Pending" : item.status.toUpperCase()}
+                            {item.status === "pending_approval"
+                              ? "Pending Approval"
+                              : item.status === "approved"
+                              ? "Approved"
+                              : item.status === "rejected"
+                              ? "Rejected"
+                              : "Draft"}
                           </span>
                         </td>
                       </tr>

@@ -130,14 +130,98 @@ export const travelService = {
     apiClient.get<any[]>("/api/travel/ai-planner/conversations"),
   sendAiChat: (payload: {
     conversation_id?: string;
-    assistant_name: string;
-    executive_target: string;
+    assistant_name?: string;
+    executive_target?: string;
     message_text: string;
     destination?: string;
     start_date?: string;
     end_date?: string;
     budget_cap?: number;
   }) => apiClient.post<import("@/types/travel").AiChatResponse>("/api/travel/ai-planner/chat", payload),
+
+  sendAiChatStream: async (
+    payload: {
+      conversation_id?: string;
+      assistant_name?: string;
+      executive_target?: string;
+      message_text: string;
+      destination?: string;
+      start_date?: string;
+      end_date?: string;
+      budget_cap?: number;
+    },
+    callbacks: {
+      onStatus?: (statusText: string) => void;
+      onThinking?: (chunk: string, fullThinking: string) => void;
+      onContent?: (chunk: string, fullContent: string) => void;
+      onFlights?: (flights: any[]) => void;
+      onDone?: (data: any) => void;
+      onError?: (err: any) => void;
+    }
+  ) => {
+    const token = localStorage.getItem("token") || sessionStorage.getItem("token");
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+
+    const baseUrl = window.location.origin.includes("localhost") ? "http://localhost:8008" : window.location.origin;
+    try {
+      const res = await fetch(`${baseUrl}/api/travel/ai-planner/chat-stream`, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Chat stream failed: ${res.statusText}`);
+      }
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error("No response stream available");
+
+      const decoder = new TextDecoder("utf-8");
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() || "";
+
+        for (const part of parts) {
+          const trimmed = part.trim();
+          if (trimmed.startsWith("data: ")) {
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              if (data.type === "status" && callbacks.onStatus) {
+                callbacks.onStatus(data.text);
+              } else if (data.type === "flights_ready" && callbacks.onFlights) {
+                callbacks.onFlights(data.flights || []);
+              } else if (data.type === "thinking" && callbacks.onThinking) {
+                callbacks.onThinking(data.chunk, data.full_thinking);
+              } else if (data.type === "content" && callbacks.onContent) {
+                callbacks.onContent(data.chunk, data.full_content);
+              } else if (data.type === "done" && callbacks.onDone) {
+                callbacks.onDone(data);
+              }
+            } catch (e) {
+              console.debug("SSE json parse error", e);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      if (callbacks.onError) {
+        callbacks.onError(err);
+      } else {
+        throw err;
+      }
+    }
+  },
   autoBookAiItinerary: (payload: {
     conversation_id?: string;
     traveler_name: string;
@@ -238,8 +322,12 @@ export const travelService = {
   uploadAndExtractReceipt: (formData: FormData) =>
     apiClient.post<import("@/types/travel").ReceiptExtractionResult>(
       "/api/travel/receipts/upload-extract",
-      formData,
-      { headers: { "Content-Type": "multipart/form-data" } }
+      formData
+    ),
+  batchUploadAndExtractReceipts: (formData: FormData) =>
+    apiClient.post<import("@/types/travel").BatchReceiptUploadResponse>(
+      "/api/travel/receipts/batch-upload",
+      formData
     ),
   aiRefineReceipt: (payload: { raw_text?: string; current_data?: any; notes_or_hint?: string }) =>
     apiClient.post<import("@/types/travel").ReceiptExtractionResult>("/api/travel/receipts/ai-refine", payload),
@@ -265,6 +353,8 @@ export const travelService = {
   },
   getReceipt: (receiptId: string) =>
     apiClient.get<import("@/types/travel").TravelReceipt>(`/api/travel/receipts/${receiptId}`),
+  getReceiptAttachmentUrl: (receiptId: string, inline = false) =>
+    `/api/travel/receipts/${receiptId}/attachment${inline ? "?inline=true" : ""}`,
   updateReceipt: (receiptId: string, payload: Partial<import("@/types/travel").TravelReceipt>) =>
     apiClient.put<import("@/types/travel").TravelReceipt>(`/api/travel/receipts/${receiptId}`, payload),
   deleteReceipt: (receiptId: string) =>

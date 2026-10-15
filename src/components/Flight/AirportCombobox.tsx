@@ -85,14 +85,19 @@ export const AirportCombobox: React.FC<AirportComboboxProps> = ({
           <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
             <Plane className="w-4 h-4" />
           </div>
-          <div className="truncate">
+          <div className="truncate flex-1">
             {selectedAirport ? (
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-base text-foreground tracking-tight">
-                  {selectedAirport.iata}
-                </span>
-                <span className="text-xs text-muted-foreground truncate">
-                  {selectedAirport.city}, {selectedAirport.country}
+              <div className="flex flex-col text-left truncate">
+                <div className="flex items-center gap-2 truncate">
+                  <span className="font-bold text-sm sm:text-base text-foreground tracking-tight font-mono">
+                    {selectedAirport.iata}
+                  </span>
+                  <span className="text-xs font-semibold text-foreground/90 truncate">
+                    {selectedAirport.name}
+                  </span>
+                </div>
+                <span className="text-[11px] text-muted-foreground truncate">
+                  {selectedAirport.city ? `${selectedAirport.city}, ` : ""}{selectedAirport.country}
                 </span>
               </div>
             ) : (
@@ -104,24 +109,24 @@ export const AirportCombobox: React.FC<AirportComboboxProps> = ({
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute left-0 top-full mt-1.5 w-80 md:w-96 bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
+        <div className="absolute left-0 top-full mt-1.5 w-full sm:w-[440px] max-w-[95vw] bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden">
           {/* Search bar inside popup */}
           <div className="p-2.5 border-b border-border bg-muted/40 flex items-center gap-2">
-            <Search className="w-4 h-4 text-muted-foreground" />
+            <Search className="w-4 h-4 text-muted-foreground shrink-0" />
             <input
               type="text"
               autoFocus
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Type city or airport code (e.g. YYZ, YVR, New York)..."
+              placeholder="Type city or airport code (e.g. YYZ, YVR, Paris, LAS)..."
               className="w-full bg-transparent text-sm text-foreground focus:outline-hidden placeholder:text-muted-foreground"
             />
           </div>
 
           {/* Results list */}
-          <div className="max-h-64 overflow-y-auto p-1 divide-y divide-border/40">
+          <div className="max-h-72 overflow-y-auto p-1 divide-y divide-border/40">
             {isLoading ? (
-              <div className="p-4 text-center text-xs text-muted-foreground">Searching airports...</div>
+              <div className="p-4 text-center text-xs text-muted-foreground">Searching global airports...</div>
             ) : airports.length === 0 ? (
               <div className="p-4 text-center text-xs text-muted-foreground">No matching airports found</div>
             ) : (
@@ -140,15 +145,18 @@ export const AirportCombobox: React.FC<AirportComboboxProps> = ({
                       isSelected ? "bg-primary/10 text-primary" : "text-foreground"
                     }`}
                   >
-                    <div className="flex items-center gap-2.5 overflow-hidden">
-                      <span className="px-2 py-1 text-xs font-mono font-bold bg-muted rounded-md text-foreground border border-border/80 shrink-0">
+                    <div className="flex items-center gap-3 overflow-hidden">
+                      <span className="px-2 py-1 text-xs font-mono font-bold bg-primary/10 text-primary rounded-md border border-primary/20 shrink-0">
                         {airport.iata}
                       </span>
                       <div className="truncate">
-                        <div className="text-sm font-medium truncate">{airport.name}</div>
+                        <div className="text-sm font-semibold text-foreground truncate flex items-center gap-1.5">
+                          <span>{airport.name}</span>
+                          <span className="text-xs text-muted-foreground font-mono font-normal">({airport.iata})</span>
+                        </div>
                         <div className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Building2 className="w-3 h-3 inline" />
-                          <span>{airport.city}, {airport.country}</span>
+                          <Building2 className="w-3 h-3 inline shrink-0" />
+                          <span>{airport.city ? `${airport.city}, ` : ""}{airport.country}</span>
                         </div>
                       </div>
                     </div>

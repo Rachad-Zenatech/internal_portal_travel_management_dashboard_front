@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Sparkles,
   Send,
@@ -9,11 +9,16 @@ import {
   Bookmark,
   Trash2,
   RefreshCw,
-  DollarSign,
   ShieldCheck,
   ArrowRightLeft,
   Users,
   Search,
+  Maximize2,
+  Minimize2,
+  Brain,
+  ChevronDown,
+  ChevronUp,
+  Terminal,
 } from "lucide-react";
 import { travelService } from "@/services/travelService";
 import { flightService } from "@/services/flightService";
@@ -62,21 +67,56 @@ export default function AiTravelAssistantPage() {
   const [isSearchingFlights, setIsSearchingFlights] = useState<boolean>(false);
   const [hasSearchedFlights, setHasSearchedFlights] = useState<boolean>(false);
 
+  // Filtered & Sorted Search Results
+  const processedSearchResults = useMemo(() => {
+    let list = [...searchResults];
+    if (searchMaxStops !== undefined) {
+      list = list.filter((f) => f.outbound.stops_count <= searchMaxStops);
+    }
+    if (searchSortBy === "lowest_price") {
+      list.sort((a, b) => a.price - b.price);
+    } else if (searchSortBy === "shortest_duration") {
+      list.sort(
+        (a, b) =>
+          (a.outbound.total_duration_minutes || 0) - (b.outbound.total_duration_minutes || 0)
+      );
+    } else if (searchSortBy === "departure_time") {
+      list.sort((a, b) =>
+        (a.outbound.departure_time || "").localeCompare(b.outbound.departure_time || "")
+      );
+    }
+    return list;
+  }, [searchResults, searchMaxStops, searchSortBy]);
+
+  const topExplorerFlights = useMemo(
+    () => processedSearchResults.filter((f) => !f.flight_category || f.flight_category.toLowerCase().includes("top")),
+    [processedSearchResults]
+  );
+  const otherExplorerFlights = useMemo(
+    () => processedSearchResults.filter((f) => f.flight_category && f.flight_category.toLowerCase().includes("other")),
+    [processedSearchResults]
+  );
+
   // Executive & Chat State
   const [executives, setExecutives] = useState<ExecutiveProfile[]>([]);
   const [selectedExecName, setSelectedExecName] = useState<string>("");
-  const [assistantName, setAssistantName] = useState<string>("Travel Coordinator");
-  const [destination, setDestination] = useState<string>("Los Angeles (LAX)");
-  const [budgetCap, setBudgetCap] = useState<number>(5000);
+  const assistantName = user?.full_name || "Travel Coordinator";
   const [inputText, setInputText] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
+
+  // Fullscreen & Reasoning States
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [modelThinking, setModelThinking] = useState<string>("");
+  const [loadingStatusText, setLoadingStatusText] = useState<string>("");
+  const [expandedThinkingIds, setExpandedThinkingIds] = useState<Set<string>>(new Set());
 
   const [chatMessages, setChatMessages] = useState<
     Array<{
       id: string;
       sender: "assistant" | "bot";
       message_text: string;
+      model_thinking?: string;
       itinerary_payload?: any;
       created_at: string;
     }>
@@ -98,10 +138,20 @@ export default function AiTravelAssistantPage() {
   }, []);
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isFullscreen]);
+
+  useEffect(() => {
     if (activeHubTab === "chat") {
       messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
-  }, [chatMessages, activeHubTab]);
+  }, [chatMessages, activeHubTab, modelThinking]);
 
   const loadInitialData = async () => {
     try {
@@ -151,32 +201,99 @@ export default function AiTravelAssistantPage() {
     setChatMessages((prev) => [...prev, userMsg]);
     setInputText("");
     setLoading(true);
+    setModelThinking("");
+    setLoadingStatusText("Connecting to Ollama (zena-travel-agent)...");
+
+    let accumulatedThinking = "";
+    let accumulatedContent = "";
+    let receivedFlights: FlightSearchResultItem[] = [];
 
     try {
-      const res = await travelService.sendAiChat({
-        conversation_id: conversationId || undefined,
-        assistant_name: assistantName,
-        executive_target: selectedExecName,
-        message_text: text,
-        destination,
-        budget_cap: budgetCap,
-      });
-
-      if (res) {
-        setConversationId(res.conversation_id);
-        setChatMessages(res.messages || []);
-      }
+      await travelService.sendAiChatStream(
+        {
+          conversation_id: conversationId || undefined,
+          assistant_name: assistantName,
+          message_text: text,
+        },
+        {
+          onStatus: (status) => {
+            setLoadingStatusText(status);
+          },
+          onThinking: (chunk) => {
+            accumulatedThinking += chunk;
+            setModelThinking(accumulatedThinking);
+          },
+          onContent: (chunk) => {
+            accumulatedContent += chunk;
+          },
+          onFlights: (flights) => {
+            receivedFlights = flights;
+          },
+          onDone: (data) => {
+            if (data.conversation_id) {
+              setConversationId(data.conversation_id);
+            }
+            if (data.executive_target) {
+              setSelectedExecName(data.executive_target);
+            }
+            if (data.messages && data.messages.length > 0) {
+              setChatMessages(data.messages);
+            } else {
+              const botMsg = {
+                id: "bot-" + Date.now(),
+                sender: "bot" as const,
+                message_text: accumulatedContent || data.reply_text || data.latest_bot_reply || "",
+                model_thinking: accumulatedThinking || data.model_thinking || "",
+                itinerary_payload: {
+                  model_thinking: accumulatedThinking || data.model_thinking || "",
+                  flights: receivedFlights.length > 0 ? receivedFlights : (data.flights || []),
+                  options: data.itinerary_options || [],
+                },
+                created_at: new Date().toISOString(),
+              };
+              setChatMessages((prev) => [...prev, botMsg]);
+            }
+            setLoading(false);
+            setModelThinking("");
+          },
+          onError: async (err) => {
+            console.warn("Stream error, falling back to standard API:", err);
+            try {
+              setLoadingStatusText("Analyzing request with zena-travel-agent...");
+              const res = await travelService.sendAiChat({
+                conversation_id: conversationId || undefined,
+                assistant_name: assistantName,
+                message_text: text,
+              });
+              if (res) {
+                setConversationId(res.conversation_id);
+                setChatMessages(res.messages || []);
+                if (res.executive_target) {
+                  setSelectedExecName(res.executive_target);
+                }
+              }
+            } catch (fallbackErr) {
+              console.error("Fallback error:", fallbackErr);
+              toast.error("Failed to communicate with AI Travel Assistant");
+            } finally {
+              setLoading(false);
+              setModelThinking("");
+            }
+          },
+        }
+      );
     } catch (err) {
       console.error("Error during AI chat", err);
-      toast.error("Failed to communicate with AI Travel Assistant");
-    } finally {
       setLoading(false);
+      setModelThinking("");
+      toast.error("Failed to communicate with AI Travel Assistant");
     }
   };
 
   const handleClearChat = () => {
     setChatMessages([]);
     setConversationId(null);
+    setModelThinking("");
     toast.success("Chat conversation cleared.");
   };
 
@@ -314,17 +431,22 @@ export default function AiTravelAssistantPage() {
     const prompt = `Analyze this ${flight.airline_name} flight (${flight.flight_numbers}) from ${flight.outbound.origin_airport} to ${flight.outbound.destination_airport} at $${flight.price} ${flight.currency} for ${selectedExecName}. Check corporate travel policy and suggest booking recommendations.`;
     handleSendPrompt(prompt);
   };
-
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
+    <div
+      className={
+        isFullscreen
+          ? "fixed inset-0 z-50 bg-background flex flex-col p-3 sm:p-5 overflow-hidden"
+          : "p-3 sm:p-5 lg:p-6 space-y-4 w-full flex-1 flex flex-col min-h-[calc(100vh-4rem)]"
+      }
+    >
       {/* Top Banner / Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-border pb-3 shrink-0">
         <div>
           <div className="flex items-center gap-2.5 mb-1">
             <span className="p-2 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
               <Sparkles className="w-5 h-5 animate-pulse" />
             </span>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">
               AI Travel Assistant
             </h1>
             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1.5 py-0.5">
@@ -333,278 +455,394 @@ export default function AiTravelAssistantPage() {
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Intelligent booking engine for Executive Assistants. Queries live airline fares, checks corporate policy, and embeds interactive flight options directly inside the conversation.
+            Intelligent booking engine for Executive Assistants. Powered by Ollama <code className="font-mono text-foreground font-semibold">zena-travel-agent</code> with live reasoning extraction and verified Google Flights.
           </p>
         </div>
 
-        {/* View Switcher Tabs */}
-        <div className="flex bg-muted/60 p-1 rounded-xl border border-border shrink-0 self-start">
-          <button
-            onClick={() => setActiveHubTab("chat")}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeHubTab === "chat"
-                ? "bg-card text-foreground shadow-xs font-bold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+        {/* View Switcher Tabs & Fullscreen Controls */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex bg-muted/60 p-1 rounded-xl border border-border shrink-0">
+            <button
+              onClick={() => setActiveHubTab("chat")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeHubTab === "chat"
+                  ? "bg-card text-foreground shadow-xs font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Bot className="w-3.5 h-3.5 text-indigo-500" />
+              <span>AI Travel Bot</span>
+            </button>
+            <button
+              onClick={() => setActiveHubTab("explorer")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeHubTab === "explorer"
+                  ? "bg-card text-foreground shadow-xs font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Plane className="w-3.5 h-3.5 text-blue-500" />
+              <span>Flight Explorer</span>
+            </button>
+            <button
+              onClick={() => setActiveHubTab("saved")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeHubTab === "saved"
+                  ? "bg-card text-foreground shadow-xs font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>Saved ({savedOptions.length})</span>
+            </button>
+            <button
+              onClick={() => setActiveHubTab("sessions")}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                activeHubTab === "sessions"
+                  ? "bg-card text-foreground shadow-xs font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span>Audit & Sessions ({recentSessions.length})</span>
+            </button>
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            className="h-8 px-2.5 rounded-xl border-border bg-card hover:bg-muted text-xs font-semibold gap-1.5 transition-colors shrink-0"
+            title={isFullscreen ? "Exit Fullscreen (Esc)" : "Expand Assistant to Fullscreen"}
           >
-            <Bot className="w-3.5 h-3.5 text-indigo-500" />
-            <span>AI Travel Bot</span>
-          </button>
-          <button
-            onClick={() => setActiveHubTab("explorer")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeHubTab === "explorer"
-                ? "bg-card text-foreground shadow-xs font-bold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Plane className="w-3.5 h-3.5 text-blue-500" />
-            <span>Flight Explorer</span>
-          </button>
-          <button
-            onClick={() => setActiveHubTab("saved")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeHubTab === "saved"
-                ? "bg-card text-foreground shadow-xs font-bold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <Bookmark className="w-3.5 h-3.5" />
-            <span>Saved ({savedOptions.length})</span>
-          </button>
-          <button
-            onClick={() => setActiveHubTab("sessions")}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
-              activeHubTab === "sessions"
-                ? "bg-card text-foreground shadow-xs font-bold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            <span>Audit & Sessions ({recentSessions.length})</span>
-          </button>
+            {isFullscreen ? (
+              <>
+                <Minimize2 className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="hidden sm:inline">Exit Fullscreen</span>
+              </>
+            ) : (
+              <>
+                <Maximize2 className="w-3.5 h-3.5 text-indigo-500" />
+                <span className="hidden sm:inline">Fullscreen</span>
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
       {/* ===================== TAB 1: AI TRAVEL BOT & CHAT ===================== */}
       {activeHubTab === "chat" && (
-        <div className="space-y-6">
-          {/* Executive & Travel Control Strip */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 rounded-xl bg-card border border-border shadow-xs">
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                Traveling Executive
-              </label>
-              <select
-                value={selectedExecName}
-                onChange={(e) => setSelectedExecName(e.target.value)}
-                className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs font-medium focus:outline-hidden"
+        <div className={`w-full flex flex-col ${isFullscreen ? "flex-1 min-h-0" : "flex-1 min-h-[620px] h-[calc(100vh-12rem)]"} bg-card rounded-2xl border border-border shadow-xs overflow-hidden`}>
+          {/* Chat Session Header */}
+          <div className="p-3 sm:p-4 border-b border-border bg-muted/30 flex items-center justify-between flex-wrap gap-2 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+              <span className="text-xs sm:text-sm font-bold text-foreground">
+                Zenatech Travel Agent
+              </span>
+              <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-semibold flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-emerald-500" />
+                Ollama: zena-travel-agent • Real-Time Engine
+              </Badge>
+            </div>
+
+            {/* Actions: Clear Chat & Fullscreen */}
+            <div className="flex items-center gap-2">
+              {chatMessages.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={handleClearChat}
+                  className="text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1.5 h-8 px-2.5 rounded-lg border border-border/80 transition-colors"
+                  title="Clear conversation history and reset session"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Clear Chat</span>
+                </Button>
+              )}
+
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => setIsFullscreen(!isFullscreen)}
+                className="text-xs text-muted-foreground hover:text-foreground hover:bg-muted gap-1.5 h-8 px-2.5 rounded-lg border border-border/80 transition-colors"
+                title={isFullscreen ? "Exit Fullscreen (Esc)" : "Expand to Fullscreen"}
               >
-                {executives.map((ex) => (
-                  <option key={ex.id} value={ex.name}>
-                    {ex.name} — {ex.title}
-                  </option>
-                ))}
-                {executives.length === 0 && (
-                  <>
-                    <option value="CEO (Michael Vance)">CEO (Michael Vance)</option>
-                    <option value="Sajjad">Sajjad (VP Engineering)</option>
-                    <option value="Jim">Jim (VP Operations)</option>
-                    <option value="Simon">Simon (VP Hardware)</option>
-                    <option value="Phil">Phil (VP Flight Testing)</option>
-                    <option value="Linda">Linda (VP Strategic Partnerships)</option>
-                  </>
-                )}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                Destination & Airport
-              </label>
-              <Input
-                value={destination}
-                onChange={(e) => setDestination(e.target.value)}
-                placeholder="e.g. Los Angeles (LAX) or Vancouver (YVR)"
-                className="h-9 text-xs rounded-lg"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                Executive Assistant (EA)
-              </label>
-              <select
-                value={assistantName}
-                onChange={(e) => setAssistantName(e.target.value)}
-                className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs font-medium focus:outline-hidden"
-              >
-                <option value="Vanessa">Vanessa (Executive Assistant)</option>
-                <option value="Pat">Pat (Executive Assistant)</option>
-                <option value="Alex">Alex (Travel Coordinator)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block mb-1.5">
-                Pre-Trip Budget Cap (CAD)
-              </label>
-              <div className="relative">
-                <DollarSign className="w-3.5 h-3.5 absolute left-3 top-2.5 text-muted-foreground" />
-                <Input
-                  type="number"
-                  value={budgetCap}
-                  onChange={(e) => setBudgetCap(Number(e.target.value))}
-                  className="h-9 pl-8 text-xs rounded-lg"
-                />
-              </div>
+                {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">{isFullscreen ? "Collapse" : "Expand"}</span>
+              </Button>
             </div>
           </div>
 
-          {/* ===================== FULL-WIDTH CHAT SESSION ===================== */}
-          <div className="w-full flex flex-col h-[780px] bg-card rounded-2xl border border-border shadow-xs overflow-hidden">
-            {/* Chat Session Header */}
-            <div className="p-4 border-b border-border bg-muted/30 flex items-center justify-between flex-wrap gap-2">
-              <div className="flex items-center gap-2.5">
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-xs sm:text-sm font-bold text-foreground">
-                  Assistant Chat Session ({assistantName} ↔ Zenatech Travel Bot)
-                </span>
-                <Badge variant="outline" className="text-[10px] bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/20 font-semibold">
-                  Executive: {selectedExecName.split(" ")[0]}
-                </Badge>
-              </div>
-
-              {/* Clear Chat Button */}
-              <div className="flex items-center gap-2">
-                {chatMessages.length > 0 && (
-                  <Button
-                    variant="ghost"
-                    size="xs"
-                    onClick={handleClearChat}
-                    className="text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1.5 h-8 px-2.5 rounded-lg border border-border/80 transition-colors"
-                    title="Clear conversation history and reset session"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Clear Chat</span>
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Messages Stream */}
-            <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-6 text-sm">
-              {chatMessages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground p-8">
-                  <div className="p-4 bg-muted/60 rounded-full mb-3 text-indigo-500 border border-border/50">
-                    <Plane className="w-8 h-8" />
-                  </div>
-                  <h4 className="font-bold text-foreground text-base">Travel Bot Ready</h4>
-                  <p className="text-xs text-muted-foreground max-w-md mt-1.5 leading-relaxed">
-                    Ask the Travel Bot to find flights, recommend luxury hotels, or verify policy for{" "}
-                    <strong className="text-foreground">{selectedExecName}</strong>.
-                    Live flight results will appear directly in this window with complete outbound & return schedules.
-                  </p>
+          {/* Messages Stream */}
+          <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-6 text-sm">
+            {chatMessages.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-center text-muted-foreground p-8">
+                <div className="p-4 bg-muted/60 rounded-full mb-3 text-indigo-500 border border-border/50">
+                  <Plane className="w-8 h-8" />
                 </div>
-              ) : (
-                chatMessages.map((msg, i) => (
-                  <div
-                    key={msg.id || i}
-                    className={`flex flex-col ${
-                      msg.sender === "assistant" ? "items-end" : "items-start"
-                    } space-y-2`}
+                <h4 className="font-bold text-foreground text-base">Zenatech Travel Agent Ready</h4>
+                <p className="text-xs text-muted-foreground max-w-md mt-1.5 leading-relaxed">
+                  Chat naturally to search live flights, compare schedules, check executive policies, and book trips.
+                  The assistant extracts traveler names, routes, dates, and budget caps directly from your conversation.
+                </p>
+                <div className="flex flex-wrap gap-2 justify-center mt-5 max-w-lg">
+                  <button
+                    type="button"
+                    onClick={() => handleSendPrompt("Find business class flights from Toronto to Los Angeles for Michael Vance next week with budget $4000")}
+                    className="text-xs bg-muted/60 hover:bg-muted text-foreground border border-border/80 px-3.5 py-1.5 rounded-full transition-colors cursor-pointer"
                   >
-                    <div className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
-                      {msg.sender === "assistant" ? (
-                        <>
-                          <span>{assistantName} (Executive Assistant)</span>
-                          <User className="w-3 h-3 text-indigo-500" />
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-3 h-3 text-amber-500" />
-                          <span>Zenatech Travel Agent</span>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Text Bubble */}
-                    <div
-                      className={`p-4 rounded-2xl max-w-[85%] whitespace-pre-wrap leading-relaxed text-xs sm:text-sm ${
-                        msg.sender === "assistant"
-                          ? "bg-indigo-600 text-white rounded-tr-xs"
-                          : "bg-muted/60 text-foreground border border-border/80 rounded-tl-xs shadow-2xs"
-                      }`}
-                    >
-                      {msg.message_text}
-                    </div>
-
-                    {/* EMBEDDED FLIGHT CARDS (WIDE & FULLY DETAILED) */}
-                    {msg.sender === "bot" && msg.itinerary_payload?.flights && msg.itinerary_payload.flights.length > 0 && (
-                      <div className="w-full mt-3 space-y-4 pt-3 border-t border-border/60">
-                        <div className="flex items-center justify-between text-xs font-bold text-foreground px-1 pb-1">
-                          <span className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 text-sm">
-                            <Plane className="w-4 h-4" />
-                            Live Google Flights ({msg.itinerary_payload.flights.length} Options)
-                          </span>
-                          <span className="text-xs font-normal text-muted-foreground flex items-center gap-1">
-                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 inline" />
-                            Real-Time Fares Verified
-                          </span>
-                        </div>
-
-                        <div className="space-y-4">
-                          {msg.itinerary_payload.flights.map((flight: FlightSearchResultItem, fIdx: number) => (
-                            <FlightCard
-                              key={flight.option_id || fIdx}
-                              flight={flight}
-                              isSaved={savedOptionIds.has(flight.option_id)}
-                              isCheapest={fIdx === 0}
-                              onSelect={(f) => handleContinueToBooking(f)}
-                              onSave={(f) => handleSaveFlight(f)}
-                            />
-                          ))}
-                        </div>
-                      </div>
+                    ✈️ Business class YYZ ➔ LAX for Michael Vance
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSendPrompt("a round trip to YVR from 16th Oct to 21st Oct. 2 persons")}
+                    className="text-xs bg-muted/60 hover:bg-muted text-foreground border border-border/80 px-3.5 py-1.5 rounded-full transition-colors cursor-pointer"
+                  >
+                    ✈️ Round trip to YVR from 16th Oct to 21st Oct (2 persons)
+                  </button>
+                </div>
+              </div>
+            ) : (
+              chatMessages.map((msg, i) => (
+                <div
+                  key={msg.id || i}
+                  className={`flex flex-col ${
+                    msg.sender === "assistant" ? "items-end" : "items-start"
+                  } space-y-2 w-full`}
+                >
+                  <div className="flex items-center gap-1.5 px-1 text-[11px] text-muted-foreground">
+                    {msg.sender === "assistant" ? (
+                      <>
+                        <span>{assistantName} (Executive Assistant)</span>
+                        <User className="w-3 h-3 text-indigo-500" />
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-3 h-3 text-amber-500" />
+                        <span>Zenatech Travel Agent</span>
+                      </>
                     )}
                   </div>
-                ))
-              )}
 
-              {loading && (
-                <div className="flex items-center gap-2.5 text-xs text-muted-foreground p-3.5 bg-muted/40 rounded-xl max-w-md border border-border/60">
-                  <Loader2 className="w-4 h-4 animate-spin text-indigo-500 shrink-0" />
-                  <span>Scraping live Google Flights, Bonvoy hotels & checking calendar...</span>
+                  {/* Text Bubble */}
+                  <div
+                    className={`p-4 rounded-2xl max-w-[85%] whitespace-pre-wrap leading-relaxed text-xs sm:text-sm ${
+                      msg.sender === "assistant"
+                        ? "bg-indigo-600 text-white rounded-tr-xs"
+                        : "bg-muted/60 text-foreground border border-border/80 rounded-tl-xs shadow-2xs"
+                    }`}
+                  >
+                    {msg.message_text}
+                  </div>
+
+                  {/* MODEL THINKING REASONING TRACE (Collapsible Accordion) */}
+                  {msg.sender === "bot" && (msg.model_thinking || msg.itinerary_payload?.model_thinking) && (
+                    <div className="max-w-[85%] w-full space-y-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setExpandedThinkingIds((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(msg.id)) {
+                              next.delete(msg.id);
+                            } else {
+                              next.add(msg.id);
+                            }
+                            return next;
+                          });
+                        }}
+                        className="inline-flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground hover:text-foreground px-2.5 py-1 rounded-lg bg-muted/40 hover:bg-muted/70 transition-colors border border-border/60 cursor-pointer"
+                      >
+                        <Brain className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>{expandedThinkingIds.has(msg.id) ? "Hide Model Reasoning" : "View Model Reasoning Chain"}</span>
+                        {expandedThinkingIds.has(msg.id) ? (
+                          <ChevronUp className="w-3 h-3 text-muted-foreground" />
+                        ) : (
+                          <ChevronDown className="w-3 h-3 text-muted-foreground" />
+                        )}
+                      </button>
+
+                      {expandedThinkingIds.has(msg.id) && (
+                        <div className="bg-zinc-950 text-zinc-300 rounded-xl p-3.5 text-[11px] font-mono border border-zinc-800 shadow-inner max-h-60 overflow-y-auto whitespace-pre-wrap leading-relaxed animate-in fade-in duration-150">
+                          <div className="flex items-center gap-1.5 text-zinc-500 border-b border-zinc-800/80 pb-1.5 mb-2 font-mono">
+                            <Terminal className="w-3 h-3 text-emerald-400" />
+                            <span>zena-travel-agent Reasoning Scratchpad:</span>
+                          </div>
+                          {msg.model_thinking || msg.itinerary_payload?.model_thinking}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* EMBEDDED FLIGHT CARDS (WIDE & FULLY DETAILED) */}
+                  {msg.sender === "bot" && msg.itinerary_payload?.flights && msg.itinerary_payload.flights.length > 0 && (
+                    <div className="w-full mt-3 space-y-4 pt-3 border-t border-border/60">
+                      <div className="flex items-center justify-between text-xs font-bold text-foreground px-1 pb-1">
+                        <span className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 text-sm">
+                          <Plane className="w-4 h-4" />
+                          Live Google Flights ({msg.itinerary_payload.flights.length} Options)
+                        </span>
+                        <span className="text-xs font-normal text-muted-foreground flex items-center gap-1">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 inline" />
+                          Real-Time Fares Verified
+                        </span>
+                      </div>
+
+                      {(() => {
+                        const flights: FlightSearchResultItem[] = msg.itinerary_payload.flights;
+                        const topFlights = flights.filter(f => !f.flight_category || f.flight_category.toLowerCase().includes("top"));
+                        const otherFlights = flights.filter(f => f.flight_category && f.flight_category.toLowerCase().includes("other"));
+
+                        if (otherFlights.length === 0) {
+                          return (
+                            <div className="space-y-4">
+                              {flights.map((flight, fIdx) => (
+                                <FlightCard
+                                  key={flight.option_id || fIdx}
+                                  flight={flight}
+                                  isSaved={savedOptionIds.has(flight.option_id)}
+                                  isCheapest={fIdx === 0}
+                                  onSelect={(f) => handleContinueToBooking(f)}
+                                  onSave={(f) => handleSaveFlight(f)}
+                                />
+                              ))}
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div className="space-y-6">
+                            {topFlights.length > 0 && (
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2 px-1">
+                                  <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                    Top Departing Flights ({topFlights.length})
+                                  </span>
+                                  <span className="text-[11px] text-muted-foreground">• Ranked by price, duration, and convenience</span>
+                                </div>
+                                <div className="space-y-3">
+                                  {topFlights.map((flight, fIdx) => (
+                                    <FlightCard
+                                      key={flight.option_id || `top-${fIdx}`}
+                                      flight={flight}
+                                      isSaved={savedOptionIds.has(flight.option_id)}
+                                      isCheapest={fIdx === 0}
+                                      onSelect={(f) => handleContinueToBooking(f)}
+                                      onSave={(f) => handleSaveFlight(f)}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {otherFlights.length > 0 && (
+                              <div className="space-y-3 pt-3 border-t border-border/70">
+                                <div className="flex items-center gap-2 px-1">
+                                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                    <Plane className="w-3.5 h-3.5 text-muted-foreground" />
+                                    Other Departing Flights ({otherFlights.length})
+                                  </span>
+                                  <span className="text-[11px] text-muted-foreground">• Additional flight schedules and connecting routes</span>
+                                </div>
+                                <div className="space-y-3">
+                                  {otherFlights.map((flight, fIdx) => (
+                                    <FlightCard
+                                      key={flight.option_id || `other-${fIdx}`}
+                                      flight={flight}
+                                      isSaved={savedOptionIds.has(flight.option_id)}
+                                      isCheapest={false}
+                                      onSelect={(f) => handleContinueToBooking(f)}
+                                      onSave={(f) => handleSaveFlight(f)}
+                                    />
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
                 </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
+              ))
+            )}
 
-            {/* Input Bar */}
-            <div className="p-4 border-t border-border bg-background">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSendPrompt();
-                }}
-                className="flex items-center gap-3"
+            {/* LIVE MODEL THINKING & SCRATCHPAD LOADING DIALOG */}
+            {loading && (
+              <div className="w-full max-w-2xl bg-card border border-indigo-500/30 rounded-2xl p-4 shadow-lg space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="relative">
+                      <Brain className="w-5 h-5 text-indigo-500 animate-pulse" />
+                      <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                        <span>zena-travel-agent Thinking...</span>
+                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-indigo-500/10 text-indigo-500 border-indigo-500/20 font-mono">
+                          Ollama Live Stream
+                        </Badge>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                        <Loader2 className="w-3 h-3 animate-spin text-indigo-500 shrink-0" />
+                        <span>{loadingStatusText || "Analyzing executive itinerary & policy..."}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-[10px] font-mono text-muted-foreground bg-muted/60 px-2 py-1 rounded-md border border-border">
+                    http://localhost:11434
+                  </div>
+                </div>
+
+                {/* Live Monospace Terminal Screen */}
+                <div className="bg-zinc-950 text-zinc-200 rounded-xl p-3.5 font-mono text-xs border border-zinc-800 max-h-52 overflow-y-auto space-y-1 shadow-inner">
+                  <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 border-b border-zinc-800/80 pb-1.5 mb-1.5">
+                    <Terminal className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Live Model Chain-of-Thought Scratchpad:</span>
+                  </div>
+                  {modelThinking ? (
+                    <pre className="whitespace-pre-wrap font-mono text-[11px] leading-relaxed text-zinc-300">
+                      {modelThinking}
+                      <span className="inline-block w-1.5 h-3.5 bg-indigo-400 ml-1 animate-pulse align-middle" />
+                    </pre>
+                  ) : (
+                    <div className="flex items-center gap-2 text-zinc-500 text-[11px] py-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                      <span>Extracting conversation parameters & awaiting thought tokens...</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input Bar */}
+          <div className="p-3 sm:p-4 border-t border-border bg-background shrink-0">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendPrompt();
+              }}
+              className="flex items-center gap-3"
+            >
+              <Input
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                placeholder='Ask Zenatech Travel Agent (e.g. "a round trip to YVR from 16th Oct to 21st Oct. 2 persons")...'
+                className="h-11 text-xs sm:text-sm rounded-xl px-4 flex-1"
+                disabled={loading}
+              />
+              <Button
+                type="submit"
+                disabled={loading || !inputText.trim()}
+                className="h-11 px-5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 gap-2 rounded-xl font-semibold shadow-xs"
               >
-                <Input
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder={`Ask the Travel Bot (e.g. "Find direct flights to ${destination} under $${budgetCap} for ${selectedExecName}")...`}
-                  className="h-11 text-xs sm:text-sm rounded-xl px-4 flex-1"
-                  disabled={loading}
-                />
-                <Button
-                  type="submit"
-                  disabled={loading || !inputText.trim()}
-                  className="h-11 px-5 bg-indigo-600 hover:bg-indigo-700 text-white shrink-0 gap-2 rounded-xl font-semibold shadow-xs"
-                >
-                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  <span>Send</span>
-                </Button>
-              </form>
-            </div>
+                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                <span>Send</span>
+              </Button>
+            </form>
           </div>
         </div>
       )}
@@ -843,7 +1081,7 @@ export default function AiTravelAssistantPage() {
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card p-3 rounded-xl border border-border shadow-xs text-xs">
                 <div className="flex items-center gap-2">
                   <Badge variant="outline" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
-                    {searchResults.length} Flights Found
+                    {processedSearchResults.length} Flights Found
                   </Badge>
                   <span className="text-muted-foreground">
                     {searchOrigin} to {searchDestination} • {searchTripType === "round_trip" ? "Round Trip" : "One Way"}
@@ -877,19 +1115,75 @@ export default function AiTravelAssistantPage() {
               </div>
 
               {/* Flights Grid */}
-              <div className="space-y-3">
-                {searchResults.map((flight, idx) => (
-                  <FlightCard
-                    key={flight.option_id || idx}
-                    flight={flight}
-                    onSelect={handleContinueToBooking}
-                    onSave={handleSaveFlight}
-                    onAnalyzeWithAi={handleAskBotAboutFlight}
-                    isSaved={savedOptionIds.has(flight.option_id)}
-                    isCheapest={idx === 0 && searchSortBy === "lowest_price"}
-                  />
-                ))}
-              </div>
+              {searchSortBy === "recommended" && otherExplorerFlights.length > 0 ? (
+                <div className="space-y-6">
+                  {/* Top Departing Flights Section */}
+                  {topExplorerFlights.length > 0 && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="text-sm font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                          <Sparkles className="w-4 h-4" />
+                          Top Departing Flights ({topExplorerFlights.length})
+                        </span>
+                        <span className="text-xs text-muted-foreground">• Ranked by price, duration, and convenience</span>
+                      </div>
+                      <div className="space-y-3">
+                        {topExplorerFlights.map((flight, idx) => (
+                          <FlightCard
+                            key={flight.option_id || `top-${idx}`}
+                            flight={flight}
+                            onSelect={handleContinueToBooking}
+                            onSave={handleSaveFlight}
+                            onAnalyzeWithAi={handleAskBotAboutFlight}
+                            isSaved={savedOptionIds.has(flight.option_id)}
+                            isCheapest={idx === 0}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Other Departing Flights Section */}
+                  {otherExplorerFlights.length > 0 && (
+                    <div className="space-y-3 pt-4 border-t border-border">
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                          <Plane className="w-4 h-4 text-muted-foreground" />
+                          Other Departing Flights ({otherExplorerFlights.length})
+                        </span>
+                        <span className="text-xs text-muted-foreground">• Additional flight schedules and connecting routes</span>
+                      </div>
+                      <div className="space-y-3">
+                        {otherExplorerFlights.map((flight, idx) => (
+                          <FlightCard
+                            key={flight.option_id || `other-${idx}`}
+                            flight={flight}
+                            onSelect={handleContinueToBooking}
+                            onSave={handleSaveFlight}
+                            onAnalyzeWithAi={handleAskBotAboutFlight}
+                            isSaved={savedOptionIds.has(flight.option_id)}
+                            isCheapest={false}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {processedSearchResults.map((flight, idx) => (
+                    <FlightCard
+                      key={flight.option_id || idx}
+                      flight={flight}
+                      onSelect={handleContinueToBooking}
+                      onSave={handleSaveFlight}
+                      onAnalyzeWithAi={handleAskBotAboutFlight}
+                      isSaved={savedOptionIds.has(flight.option_id)}
+                      isCheapest={idx === 0 && searchSortBy === "lowest_price"}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
           ) : hasSearchedFlights ? (
             <Card className="border-border bg-card rounded-2xl p-12 text-center shadow-xs">
