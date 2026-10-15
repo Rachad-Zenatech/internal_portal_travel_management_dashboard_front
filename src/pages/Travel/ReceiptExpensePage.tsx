@@ -406,50 +406,75 @@ export default function ReceiptExpensePage() {
       const serverResult = await travelService.uploadAndExtractReceipt(formData);
 
       if (serverResult) {
-        if (serverResult.merchant_name && serverResult.merchant_name !== "Unknown Vendor") {
-          setFormMerchant(serverResult.merchant_name);
+        let extractedMerchant = serverResult.merchant_name && serverResult.merchant_name !== "Unknown Vendor" ? serverResult.merchant_name : "";
+        let extractedDate = serverResult.transaction_date || "";
+        let extractedTotal = serverResult.total_amount && serverResult.total_amount > 0 ? serverResult.total_amount : 0;
+        let extractedTax = serverResult.tax_amount;
+        let extractedTip = serverResult.tip_amount;
+        let extractedCurr = serverResult.currency || "USD";
+        let extractedRate = serverResult.exchange_rate || 1.385;
+        let extractedCat = serverResult.expense_category || "meals_entertainment";
+        let extractedPolicy = serverResult.policy || "Standard Corporate Travel Policy";
+        let extractedPayment = serverResult.payment_method || "Company Corporate Card";
+        let extractedRecNum = serverResult.receipt_number || "";
+        let extractedDesc = serverResult.description || "";
+        let extractedItems = serverResult.line_items || [];
+        const extractedRawText = serverResult.raw_extracted_text || "";
+        let confidence = serverResult.extraction_confidence || 98;
+
+        // Auto AI Refine: Automatically refine and standardize attributes with Gemini reasoning
+        setOcrProgress({ status: "Refining & cross-checking with Gemini AI...", progress: 0.85 });
+        try {
+          const refined = await travelService.aiRefineReceipt({
+            raw_text: extractedRawText,
+            current_data: {
+              merchant_name: extractedMerchant,
+              transaction_date: extractedDate,
+              total_amount: extractedTotal,
+              currency: extractedCurr,
+              expense_category: extractedCat,
+              receipt_number: extractedRecNum,
+              description: extractedDesc,
+              line_items: extractedItems,
+            },
+            notes_or_hint: extractedDesc || attachmentName,
+          });
+
+          if (refined) {
+            if (refined.merchant_name) extractedMerchant = refined.merchant_name;
+            if (refined.transaction_date) extractedDate = refined.transaction_date;
+            if (refined.total_amount && refined.total_amount > 0) extractedTotal = refined.total_amount;
+            if (refined.tax_amount !== undefined) extractedTax = refined.tax_amount;
+            if (refined.tip_amount !== undefined) extractedTip = refined.tip_amount;
+            if (refined.currency) extractedCurr = refined.currency;
+            if (refined.expense_category) extractedCat = refined.expense_category;
+            if (refined.policy) extractedPolicy = refined.policy;
+            if (refined.payment_method) extractedPayment = refined.payment_method;
+            if (refined.receipt_number) extractedRecNum = refined.receipt_number;
+            if (refined.description) extractedDesc = refined.description;
+            if (refined.line_items && refined.line_items.length > 0) extractedItems = refined.line_items;
+            confidence = refined.extraction_confidence || 99;
+          }
+        } catch (aiRefineErr) {
+          console.warn("Auto AI refine post-processing notice:", aiRefineErr);
         }
-        if (serverResult.transaction_date) {
-          setFormDate(serverResult.transaction_date);
-        }
-        if (serverResult.total_amount && serverResult.total_amount > 0) {
-          setFormSpendAmount(serverResult.total_amount);
-        }
-        if (serverResult.tax_amount !== undefined) {
-          setFormTax(serverResult.tax_amount);
-        }
-        if (serverResult.tip_amount !== undefined) {
-          setFormTip(serverResult.tip_amount);
-        }
-        if (serverResult.currency) {
-          setFormCurrency(serverResult.currency);
-        }
-        if (serverResult.exchange_rate) {
-          setFormExchangeRate(serverResult.exchange_rate);
-        }
-        if (serverResult.expense_category) {
-          setFormCategory(serverResult.expense_category);
-        }
-        if (serverResult.policy) {
-          setFormPolicy(serverResult.policy);
-        }
-        if (serverResult.payment_method) {
-          setFormPayThrough(serverResult.payment_method);
-        }
-        if (serverResult.receipt_number) {
-          setFormReceiptNum(serverResult.receipt_number);
-        }
-        if (serverResult.description) {
-          setFormDescription(serverResult.description);
-        }
-        if (serverResult.line_items && serverResult.line_items.length > 0) {
-          setFormLineItems(serverResult.line_items);
-        }
-        if (serverResult.raw_extracted_text) {
-          setRawOcrText(serverResult.raw_extracted_text);
-        }
-        setOcrConfidence(serverResult.extraction_confidence || 98);
-        toast.success(`Extracted with Gemini AI (${serverResult.extraction_confidence || 98}% confidence)!`);
+
+        if (extractedMerchant) setFormMerchant(extractedMerchant);
+        if (extractedDate) setFormDate(extractedDate);
+        if (extractedTotal > 0) setFormSpendAmount(extractedTotal);
+        if (extractedTax !== undefined) setFormTax(extractedTax);
+        if (extractedTip !== undefined) setFormTip(extractedTip);
+        if (extractedCurr) setFormCurrency(extractedCurr);
+        if (extractedRate) setFormExchangeRate(extractedRate);
+        if (extractedCat) setFormCategory(extractedCat);
+        if (extractedPolicy) setFormPolicy(extractedPolicy);
+        if (extractedPayment) setFormPayThrough(extractedPayment);
+        if (extractedRecNum) setFormReceiptNum(extractedRecNum);
+        if (extractedDesc) setFormDescription(extractedDesc);
+        if (extractedItems && extractedItems.length > 0) setFormLineItems(extractedItems);
+        if (extractedRawText) setRawOcrText(extractedRawText);
+        setOcrConfidence(confidence);
+        toast.success(`Extracted & AI-refined with Gemini (${confidence}% confidence)!`);
         setMobilePane("form");
         return;
       }
@@ -460,73 +485,82 @@ export default function ReceiptExpensePage() {
       const isPdf = attachmentType.includes("pdf") || targetFile?.name?.toLowerCase().endsWith(".pdf");
       if (!isPdf && (targetFile || targetDataUrl)) {
         try {
-          setOcrProgress({ status: "Falling back to local Tesseract OCR...", progress: 0.7 });
+          setOcrProgress({ status: "Extracting text with Tesseract OCR...", progress: 0.65 });
           const ocrResult = await runTesseractOcr(targetFile || targetDataUrl!, (progress) => {
             setOcrProgress(progress);
           });
-          if (ocrResult.merchantName && ocrResult.merchantName !== "Unknown Vendor") setFormMerchant(ocrResult.merchantName);
-          if (ocrResult.transactionDate) setFormDate(ocrResult.transactionDate);
-          if (ocrResult.totalAmount && ocrResult.totalAmount > 0) setFormSpendAmount(ocrResult.totalAmount);
-          if (ocrResult.taxAmount !== undefined) setFormTax(ocrResult.taxAmount);
-          if (ocrResult.currency) setFormCurrency(ocrResult.currency);
-          if (ocrResult.category) setFormCategory(ocrResult.category);
-          if (ocrResult.policy) setFormPolicy(ocrResult.policy);
-          if (ocrResult.payThrough) setFormPayThrough(ocrResult.payThrough);
-          if (ocrResult.receiptNumber) setFormReceiptNum(ocrResult.receiptNumber);
-          if (ocrResult.description) setFormDescription(ocrResult.description);
-          if (ocrResult.lineItems) setFormLineItems(ocrResult.lineItems);
+          let finalMerchant = ocrResult.merchantName && ocrResult.merchantName !== "Unknown Vendor" ? ocrResult.merchantName : "";
+          let finalDate = ocrResult.transactionDate || "";
+          let finalTotal = ocrResult.totalAmount && ocrResult.totalAmount > 0 ? ocrResult.totalAmount : 0;
+          let finalTax = ocrResult.taxAmount;
+          let finalTip = 0;
+          let finalCurr = ocrResult.currency || "USD";
+          let finalCat = ocrResult.category || "meals_entertainment";
+          let finalPolicy = ocrResult.policy || "Standard Corporate Travel Policy";
+          let finalPayment = ocrResult.payThrough || "Company Corporate Card";
+          let finalRecNum = ocrResult.receiptNumber || "";
+          let finalDesc = ocrResult.description || "";
+          let finalItems = ocrResult.lineItems || [];
+          let confidence = ocrResult.confidence || 92;
+
+          // Auto AI Refine on client OCR text
+          setOcrProgress({ status: "Refining with Gemini AI...", progress: 0.88 });
+          try {
+            const refined = await travelService.aiRefineReceipt({
+              raw_text: ocrResult.rawText,
+              current_data: {
+                merchant_name: finalMerchant,
+                transaction_date: finalDate,
+                total_amount: finalTotal,
+                currency: finalCurr,
+                expense_category: finalCat,
+                receipt_number: finalRecNum,
+                description: finalDesc,
+                line_items: finalItems,
+              },
+              notes_or_hint: attachmentName,
+            });
+            if (refined) {
+              if (refined.merchant_name) finalMerchant = refined.merchant_name;
+              if (refined.transaction_date) finalDate = refined.transaction_date;
+              if (refined.total_amount && refined.total_amount > 0) finalTotal = refined.total_amount;
+              if (refined.tax_amount !== undefined) finalTax = refined.tax_amount;
+              if (refined.tip_amount !== undefined) finalTip = refined.tip_amount;
+              if (refined.currency) finalCurr = refined.currency;
+              if (refined.expense_category) finalCat = refined.expense_category;
+              if (refined.policy) finalPolicy = refined.policy;
+              if (refined.payment_method) finalPayment = refined.payment_method;
+              if (refined.receipt_number) finalRecNum = refined.receipt_number;
+              if (refined.description) finalDesc = refined.description;
+              if (refined.line_items && refined.line_items.length > 0) finalItems = refined.line_items;
+              confidence = refined.extraction_confidence || 99;
+            }
+          } catch (refineErr) {
+            console.warn("Client fallback AI refine notice:", refineErr);
+          }
+
+          if (finalMerchant) setFormMerchant(finalMerchant);
+          if (finalDate) setFormDate(finalDate);
+          if (finalTotal > 0) setFormSpendAmount(finalTotal);
+          if (finalTax !== undefined) setFormTax(finalTax);
+          if (finalTip) setFormTip(finalTip);
+          if (finalCurr) setFormCurrency(finalCurr);
+          if (finalCat) setFormCategory(finalCat);
+          if (finalPolicy) setFormPolicy(finalPolicy);
+          if (finalPayment) setFormPayThrough(finalPayment);
+          if (finalRecNum) setFormReceiptNum(finalRecNum);
+          if (finalDesc) setFormDescription(finalDesc);
+          if (finalItems.length > 0) setFormLineItems(finalItems);
           setRawOcrText(ocrResult.rawText);
-          setOcrConfidence(ocrResult.confidence);
-          toast.success("Extracted using client Tesseract OCR fallback.");
+          setOcrConfidence(confidence);
+          toast.success(`Extracted & AI-refined with Gemini (${confidence}% confidence)!`);
           setMobilePane("form");
           return;
         } catch (tessErr) {
           console.error("Tesseract client fallback error:", tessErr);
         }
       }
-      toast.error("Could not extract receipt automatically. You can enter details or click 'AI Refine'.");
-    } finally {
-      setIsOcrRunning(false);
-    }
-  };
-
-  const handleAiRefine = async () => {
-    setIsOcrRunning(true);
-    setOcrProgress({ status: "Refining with Gemini 2.5 Flash AI...", progress: 0.4 });
-    try {
-      const refined = await travelService.aiRefineReceipt({
-        raw_text: rawOcrText,
-        current_data: {
-          merchant_name: formMerchant,
-          transaction_date: formDate,
-          total_amount: formSpendAmount,
-          currency: formCurrency,
-          expense_category: formCategory,
-          receipt_number: formReceiptNum,
-          description: formDescription,
-          line_items: formLineItems,
-        },
-        notes_or_hint: formDescription || attachmentName,
-      });
-
-      if (refined) {
-        if (refined.merchant_name) setFormMerchant(refined.merchant_name);
-        if (refined.transaction_date) setFormDate(refined.transaction_date);
-        if (refined.total_amount && refined.total_amount > 0) setFormSpendAmount(refined.total_amount);
-        if (refined.tax_amount !== undefined) setFormTax(refined.tax_amount);
-        if (refined.tip_amount !== undefined) setFormTip(refined.tip_amount);
-        if (refined.currency) setFormCurrency(refined.currency);
-        if (refined.expense_category) setFormCategory(refined.expense_category);
-        if (refined.policy) setFormPolicy(refined.policy);
-        if (refined.payment_method) setFormPayThrough(refined.payment_method);
-        if (refined.receipt_number) setFormReceiptNum(refined.receipt_number);
-        if (refined.description) setFormDescription(refined.description);
-        if (refined.line_items && refined.line_items.length > 0) setFormLineItems(refined.line_items);
-        setOcrConfidence(refined.extraction_confidence || 99);
-        toast.success("Gemini AI refined and standardized receipt data!");
-      }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "AI Refine failed. Check server connectivity.");
+      toast.error("Could not extract receipt automatically. You can enter details manually.");
     } finally {
       setIsOcrRunning(false);
     }
@@ -540,9 +574,17 @@ export default function ReceiptExpensePage() {
       }
       return travelService.createReceipt(payload);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["travelReceipts"] });
-      toast.success(editingReceiptId ? "Expense updated successfully!" : "Expense created successfully!");
+      queryClient.invalidateQueries({ queryKey: ["travelReceipts", "approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["travelReceipts", "sidebarPendingCount"] });
+      if (editingReceiptId) {
+        toast.success("Expense updated successfully!");
+      } else if (variables.status === "pending_approval") {
+        toast.success("Expense submitted successfully! It has been routed to Approvals.");
+      } else {
+        toast.success("Expense draft saved successfully!");
+      }
       resetForm();
       setActiveTab("list");
     },
@@ -1042,20 +1084,6 @@ export default function ReceiptExpensePage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {/* AI Refine (Gemini) Button */}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        onClick={handleAiRefine}
-                        disabled={isOcrRunning || (!rawOcrText && !formMerchant && formSpendAmount <= 0)}
-                        className="gap-1.5 text-xs rounded-lg border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 font-semibold shadow-2xs"
-                        title="Use Gemini 2.5 Flash to automatically detect missing fields, clean vendor names, parse line items and verify tax/currency"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
-                        <span>AI Refine (Gemini)</span>
-                      </Button>
-
                       {/* Policy Compliance Pill */}
                       <div
                         className={`text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 border ${

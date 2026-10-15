@@ -135,25 +135,35 @@ export default function ApprovalsPage() {
 
     // Map Stipends
     stipendsData.forEach((st: any) => {
-      const stStatus = st.disbursement_status === "disbursed" ? "approved" : (st.disbursement_status === "failed" ? "rejected" : "pending_approval");
+      const rawStatus = String(st.status || "").toLowerCase().trim();
+      const stStatus: "pending_approval" | "approved" | "rejected" =
+        rawStatus === "disbursed" || rawStatus === "approved"
+          ? "approved"
+          : rawStatus === "failed" || rawStatus === "rejected"
+          ? "rejected"
+          : "pending_approval";
+
+      const recipientName = st.recipient_name || st.traveler_name || "Traveler";
+      const totalAmount = Number(st.total_amount || st.stipend_amount || 0);
+
       items.push({
         id: `stp-${st.id}`,
         sourceType: "stipend",
         referenceNumber: `STP-${st.id.slice(0, 8).toUpperCase()}`,
-        title: `Travel Stipend: ${st.traveler_name || "Employee"}`,
-        requesterName: st.traveler_name || st.traveler_email || "Employee",
-        requesterEmail: st.traveler_email || "traveler@zenatech.com",
-        eventName: st.event_name || "Annual Corporate Summit",
+        title: `Travel Stipend: ${recipientName}`,
+        requesterName: recipientName,
+        requesterEmail: st.recipient_email || st.traveler_email || "",
+        eventName: st.event_title || st.event_name || "Corporate Travel Event",
         eventId: st.event_id,
-        amountCad: Number(st.stipend_amount || 300),
-        originalAmount: Number(st.stipend_amount || 300),
-        originalCurrency: "CAD",
+        amountCad: totalAmount,
+        originalAmount: totalAmount,
+        originalCurrency: st.currency || "CAD",
         submittedAt: st.created_at || new Date().toISOString(),
         status: stStatus,
         policy: "Executive & Employee Travel Stipend Policy",
         policyCompliant: true,
         policyNotes: "Standard daily stipend allocation.",
-        description: `Direct deposit stipend for ${st.traveler_name || "traveler"} travel operations.`,
+        description: st.notes || `Direct deposit stipend for ${recipientName} travel operations.`,
         hasAttachment: false,
         rawPayload: st,
       });
@@ -161,28 +171,45 @@ export default function ApprovalsPage() {
 
     // Map Bookings
     bookingsData.forEach((bk: any) => {
-      const bkStatus = bk.booking_status === "confirmed" ? "approved" : (bk.booking_status === "cancelled" ? "rejected" : "pending_approval");
+      const rawStatus = String(bk.status || bk.booking_status || "").toLowerCase().trim();
+      const bkStatus: "pending_approval" | "approved" | "rejected" =
+        rawStatus === "confirmed" || rawStatus === "approved"
+          ? "approved"
+          : rawStatus === "cancelled" || rawStatus === "rejected"
+          ? "rejected"
+          : rawStatus === "pending" || rawStatus === "pending_approval" || rawStatus === "requested"
+          ? "pending_approval"
+          : "approved";
+
+      const travelerName = bk.traveler_name || bk.booked_by_name || "Executive Traveler";
+      const carrier = bk.carrier_airline || bk.carrier || "Airline";
+      const flightNum = bk.flight_numbers || bk.flight_number || "";
+      const totalFare = Number(bk.total_cost || bk.total_fare || 0);
+      const isCompliant = totalFare <= 2500;
+
       items.push({
         id: `bkg-${bk.id}`,
         sourceType: "booking",
         referenceNumber: bk.booking_reference || `BKG-${bk.id.slice(0, 8).toUpperCase()}`,
-        title: `${bk.carrier || "Flight"} - ${bk.flight_number || "Reservation"}`,
-        requesterName: bk.passenger_name || bk.booked_by || "Executive Traveler",
-        requesterEmail: bk.passenger_email || "traveler@zenatech.com",
-        eventName: bk.event_title || "Executive Travel Itinerary",
+        title: flightNum ? `${carrier} ${flightNum}` : carrier,
+        requesterName: travelerName,
+        requesterEmail: bk.traveler_email || bk.passenger_email || "",
+        eventName: bk.event_title || (bk.origin_city && bk.destination_city ? `${bk.origin_city} → ${bk.destination_city}` : "Executive Travel Itinerary"),
         eventId: bk.event_id,
-        amountCad: Number(bk.total_fare || 850),
-        originalAmount: Number(bk.total_fare || 850),
+        amountCad: totalFare,
+        originalAmount: totalFare,
         originalCurrency: bk.currency || "CAD",
         submittedAt: bk.created_at || new Date().toISOString(),
         status: bkStatus,
         policy: "Air Canada & Commercial Flight Policy",
-        policyCompliant: Number(bk.total_fare || 850) <= 2500,
-        policyNotes: Number(bk.total_fare || 850) <= 2500 ? "Within standard air travel corridor." : "High tier booking corridor.",
-        description: `Booking for ${bk.origin || "YYZ"} to ${bk.destination || "SFO"}. Seat: ${bk.seat_assigned || "Standard"}.`,
+        policyCompliant: isCompliant,
+        policyNotes: isCompliant ? "Within standard air travel corridor." : "Exceeds standard booking corridor threshold ($2,500 CAD).",
+        description: bk.origin_city && bk.destination_city
+          ? `Flight from ${bk.origin_city} to ${bk.destination_city}.${bk.seat_assignment ? ` Seat: ${bk.seat_assignment}.` : ""}`
+          : `Reservation with ${carrier}. Reference: ${bk.booking_reference || "N/A"}.`,
         hasAttachment: Boolean(bk.eticket_pdf_url),
         attachmentUrl: bk.eticket_pdf_url,
-        attachmentName: "AirCanada_eTicket.pdf",
+        attachmentName: bk.eticket_pdf_url ? "AirCanada_eTicket.pdf" : null,
         rawPayload: bk,
       });
     });
