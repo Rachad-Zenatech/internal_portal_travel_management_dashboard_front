@@ -596,8 +596,8 @@ export default function ReceiptExpensePage() {
   }, [receiptsList, searchQuery]);
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-      {/* ===================== ZOHO EXPENSE HEADER BAR ===================== */}
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 w-full">
+      {/* ===================== EXPENSE HEADER BAR ===================== */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
         <div>
           <div className="flex items-center gap-2.5 mb-1">
@@ -605,7 +605,7 @@ export default function ReceiptExpensePage() {
               <Receipt className="w-5 h-5" />
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Receipts & Expenses (Zoho Expense Prototype)
+              Receipts & Expenses
             </h1>
             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1.5 py-0.5">
               <Sparkles className="w-3 h-3 text-emerald-500 animate-pulse" />
@@ -924,7 +924,7 @@ export default function ReceiptExpensePage() {
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <div>
                       <CardTitle className="text-base font-bold text-foreground">
-                        {editingReceiptId ? "Edit Expense Entry" : "Expense Details (Zoho Expense Form)"}
+                        {editingReceiptId ? "Edit Expense Entry" : "Expense Details"}
                       </CardTitle>
                       <CardDescription className="text-xs">
                         Review attributes extracted by Tesseract OCR or modify manual fields.
@@ -1733,7 +1733,6 @@ export default function ReceiptExpensePage() {
                         <th className="p-3 text-right whitespace-nowrap min-w-[130px]">Amount (Original)</th>
                         <th className="p-3 text-right whitespace-nowrap min-w-[140px]">Amount in (CAD)</th>
                         <th className="p-3 text-center whitespace-nowrap min-w-[130px]">Status</th>
-                        <th className="p-3 text-right whitespace-nowrap w-14">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -1749,26 +1748,19 @@ export default function ReceiptExpensePage() {
                           <tr
                             key={rec.id}
                             onClick={() => setSelectedReceiptDetail(rec)}
-                            className="hover:bg-muted/30 transition-colors cursor-pointer group"
+                            className="hover:bg-muted/40 transition-colors cursor-pointer group"
                             title="Click row to view expense details"
                           >
                             {/* Receipt Thumbnail */}
                             <td className="p-3 text-center whitespace-nowrap">
                               {rec.file_data ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedReceiptDetail(rec);
-                                  }}
-                                  className="w-9 h-9 rounded-lg overflow-hidden border border-border hover:border-primary transition-all inline-block shadow-2xs"
-                                >
+                                <div className="w-9 h-9 rounded-lg overflow-hidden border border-border group-hover:border-primary transition-all inline-block shadow-2xs">
                                   <img
                                     src={rec.file_data}
                                     alt="Receipt"
                                     className="w-full h-full object-cover"
                                   />
-                                </button>
+                                </div>
                               ) : (
                                 <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground mx-auto">
                                   <Receipt className="w-4 h-4" />
@@ -1776,9 +1768,9 @@ export default function ReceiptExpensePage() {
                               )}
                             </td>
 
-                            {/* Date & Merchant (Guaranteed single line, never awkward hyphen break) */}
+                            {/* Date & Merchant */}
                             <td className="p-3 whitespace-nowrap min-w-[240px]">
-                              <div className="font-bold text-foreground text-sm flex items-center gap-1.5 whitespace-nowrap">
+                              <div className="font-bold text-foreground text-sm flex items-center gap-1.5 whitespace-nowrap group-hover:text-primary transition-colors">
                                 <span className="whitespace-nowrap">{rec.merchant_name}</span>
                                 {rec.extraction_confidence && Number(rec.extraction_confidence) >= 95 && (
                                   <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 px-1 py-0 whitespace-nowrap">
@@ -1851,24 +1843,6 @@ export default function ReceiptExpensePage() {
                                   ? "Pending Approval"
                                   : rec.status.charAt(0).toUpperCase() + rec.status.slice(1)}
                               </span>
-                            </td>
-
-                            {/* Actions (Click row to view details; edit button preserved) */}
-                            <td className="p-3 text-right whitespace-nowrap w-14">
-                              <div className="flex items-center justify-end">
-                                <Button
-                                  variant="ghost"
-                                  size="xs"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    loadExpenseIntoEditor(rec);
-                                  }}
-                                  title="Edit Expense"
-                                  className="h-7 w-7 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
-                                >
-                                  <Wrench className="w-3.5 h-3.5" />
-                                </Button>
-                              </div>
                             </td>
                           </tr>
                         );
@@ -1967,149 +1941,206 @@ export default function ReceiptExpensePage() {
 
       {/* ===================== EXPENSE DETAIL MODAL ===================== */}
       <Dialog open={Boolean(selectedReceiptDetail)} onOpenChange={() => setSelectedReceiptDetail(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl lg:max-w-5xl w-full max-h-[92vh] overflow-y-auto p-6">
           {selectedReceiptDetail && (
-            <div className="space-y-5">
+            <div className="space-y-6">
               <DialogHeader>
-                <div className="flex items-center justify-between">
-                  <DialogTitle className="text-lg font-bold flex items-center gap-2">
-                    <Receipt className="w-5 h-5 text-primary" />
-                    <span>{selectedReceiptDetail.merchant_name}</span>
-                  </DialogTitle>
-                  <Badge variant="outline" className="capitalize text-xs">
-                    {selectedReceiptDetail.status}
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <DialogTitle className="text-xl font-bold flex items-center gap-2.5">
+                      <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                        <Receipt className="w-5 h-5" />
+                      </div>
+                      <span>{selectedReceiptDetail.merchant_name}</span>
+                    </DialogTitle>
+                    <DialogDescription className="text-xs text-muted-foreground mt-1">
+                      Official expense record • Logged on {selectedReceiptDetail.created_at ? new Date(selectedReceiptDetail.created_at).toLocaleDateString() : "N/A"}
+                    </DialogDescription>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={`capitalize text-xs px-2.5 py-1 ${
+                      selectedReceiptDetail.status === "approved"
+                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 font-semibold"
+                        : selectedReceiptDetail.status === "reimbursed"
+                        ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border-indigo-500/30 font-semibold"
+                        : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 font-semibold"
+                    }`}
+                  >
+                    {selectedReceiptDetail.status === "pending_approval"
+                      ? "Pending Approval"
+                      : selectedReceiptDetail.status}
                   </Badge>
                 </div>
-                <DialogDescription className="text-xs">
-                  Official expense record with Tesseract OCR audit trail.
-                </DialogDescription>
               </DialogHeader>
 
-              {/* Receipt Preview if available */}
-              {selectedReceiptDetail.file_data && (
-                <div className="w-full h-56 bg-neutral-900 rounded-xl overflow-hidden flex items-center justify-center border border-border">
-                  <img
-                    src={selectedReceiptDetail.file_data}
-                    alt="Receipt"
-                    className="max-h-full max-w-full object-contain"
-                  />
-                </div>
-              )}
+              {/* Two Column Layout if receipt document exists */}
+              <div className={`grid grid-cols-1 ${selectedReceiptDetail.file_data ? "lg:grid-cols-12 gap-6" : "gap-5"}`}>
+                {/* Left Column: Receipt Document Preview */}
+                {selectedReceiptDetail.file_data && (
+                  <div className="lg:col-span-5 space-y-2">
+                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
+                      <span>Receipt Attachment</span>
+                      {selectedReceiptDetail.file_type && (
+                        <span className="text-[10px] font-mono lowercase bg-muted px-1.5 py-0.5 rounded">
+                          {selectedReceiptDetail.file_type.split("/")[1] || selectedReceiptDetail.file_type}
+                        </span>
+                      )}
+                    </div>
+                    <div className="w-full h-80 lg:h-[460px] bg-neutral-900 rounded-2xl overflow-hidden flex items-center justify-center border border-border p-2">
+                      {selectedReceiptDetail.file_type?.includes("pdf") ? (
+                        <iframe
+                          src={selectedReceiptDetail.file_data}
+                          className="w-full h-full rounded-xl border-0"
+                          title="Folio Document"
+                        />
+                      ) : (
+                        <img
+                          src={
+                            selectedReceiptDetail.file_data.startsWith("data:") || selectedReceiptDetail.file_data.startsWith("http")
+                              ? selectedReceiptDetail.file_data
+                              : `data:${selectedReceiptDetail.file_type || "image/jpeg"};base64,${selectedReceiptDetail.file_data}`
+                          }
+                          alt={selectedReceiptDetail.merchant_name}
+                          className="max-h-full max-w-full object-contain rounded-lg"
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
 
-              {/* 2-Column Info Grid */}
-              <div className="grid grid-cols-2 gap-3 text-xs bg-muted/20 p-4 rounded-xl border border-border">
-                <div>
-                  <span className="text-muted-foreground block mb-0.5">Transaction Date</span>
-                  <span className="font-semibold text-foreground">
-                    {selectedReceiptDetail.transaction_date ? String(selectedReceiptDetail.transaction_date).split("T")[0] : "N/A"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block mb-0.5">Reference / Receipt #</span>
-                  <span className="font-mono font-semibold text-foreground">
-                    {selectedReceiptDetail.receipt_number || "N/A"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block mb-0.5">Category</span>
-                  <span className="font-semibold capitalize text-foreground">
-                    {selectedReceiptDetail.expense_category.replace("_", " ")}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block mb-0.5">Policy</span>
-                  <span className="font-semibold text-foreground">
-                    {selectedReceiptDetail.policy || "Standard Corporate Policy"}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block mb-0.5">Pay Through Account</span>
-                  <span className="font-semibold text-foreground">
-                    {selectedReceiptDetail.payment_method}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block mb-0.5">Submitted By</span>
-                  <span className="font-semibold text-foreground">
-                    {selectedReceiptDetail.user_name} ({selectedReceiptDetail.user_email})
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block mb-0.5">Spend Amount (Original)</span>
-                  <span className="font-mono font-semibold text-foreground">
-                    ${Number(selectedReceiptDetail.total_amount).toFixed(2)} {selectedReceiptDetail.currency}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block mb-0.5">Amount in (CAD)</span>
-                  <span className="font-mono font-bold text-primary text-sm">
-                    ${(Number(selectedReceiptDetail.amount_cad) || Number(selectedReceiptDetail.total_amount) * 1.385).toFixed(2)} CAD
-                  </span>
+                {/* Right Column: Key Details & Itemization */}
+                <div className={`${selectedReceiptDetail.file_data ? "lg:col-span-7" : "col-span-1"} space-y-4`}>
+                  {/* Amount Summary Strip */}
+                  <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-card border border-border shadow-2xs">
+                    <div>
+                      <span className="text-[11px] font-semibold text-muted-foreground uppercase block mb-0.5">
+                        Amount in CAD
+                      </span>
+                      <span className="text-xl font-bold font-mono text-primary">
+                        ${(Number(selectedReceiptDetail.amount_cad) || Number(selectedReceiptDetail.total_amount) * (Number(selectedReceiptDetail.exchange_rate) || 1.385)).toFixed(2)} CAD
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[11px] font-semibold text-muted-foreground uppercase block mb-0.5">
+                        Original Spend
+                      </span>
+                      <span className="text-base font-bold font-mono text-foreground block">
+                        ${Number(selectedReceiptDetail.total_amount).toFixed(2)} {selectedReceiptDetail.currency}
+                      </span>
+                      {selectedReceiptDetail.currency !== "CAD" && (
+                        <span className="text-[10px] text-muted-foreground font-mono">
+                          Rate: {Number(selectedReceiptDetail.exchange_rate || 1.385).toFixed(4)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 2-Column Info Grid */}
+                  <div className="grid grid-cols-2 gap-3 text-xs bg-muted/20 p-4 rounded-xl border border-border">
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5 font-medium">Transaction Date</span>
+                      <span className="font-semibold text-foreground">
+                        {selectedReceiptDetail.transaction_date ? String(selectedReceiptDetail.transaction_date).split("T")[0] : "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5 font-medium">Reference / Receipt #</span>
+                      <span className="font-mono font-semibold text-foreground">
+                        {selectedReceiptDetail.receipt_number || "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5 font-medium">Category</span>
+                      <span className="font-semibold capitalize text-foreground">
+                        {selectedReceiptDetail.expense_category.replace("_", " ")}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5 font-medium">Policy</span>
+                      <span className="font-semibold text-foreground">
+                        {selectedReceiptDetail.policy || "Standard Corporate Policy"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5 font-medium">Pay Through Account</span>
+                      <span className="font-semibold text-foreground">
+                        {selectedReceiptDetail.payment_method}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block mb-0.5 font-medium">Submitted By</span>
+                      <span className="font-semibold text-foreground">
+                        {selectedReceiptDetail.user_name || "Employee"} {selectedReceiptDetail.user_email ? `(${selectedReceiptDetail.user_email})` : ""}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Description / Business Purpose */}
+                  {selectedReceiptDetail.description && (
+                    <div className="space-y-1">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Business Purpose</h4>
+                      <p className="text-xs text-foreground bg-muted/20 p-3 rounded-xl border border-border">
+                        {selectedReceiptDetail.description}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Line Items Table */}
+                  {getSafeLineItems(selectedReceiptDetail.line_items).length > 0 && (
+                    <div className="space-y-1.5">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Itemized Breakdown</h4>
+                      <div className="border border-border rounded-xl overflow-hidden text-xs">
+                        <table className="w-full text-left">
+                          <thead className="bg-muted/40 text-muted-foreground border-b border-border">
+                            <tr>
+                              <th className="p-2.5">Item</th>
+                              <th className="p-2.5 text-center">Qty</th>
+                              <th className="p-2.5 text-right">Price</th>
+                              <th className="p-2.5 text-right">Total</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-border">
+                            {getSafeLineItems(selectedReceiptDetail.line_items).map((li, i) => (
+                              <tr key={i}>
+                                <td className="p-2.5 text-foreground font-medium">{li.description}</td>
+                                <td className="p-2.5 text-center font-mono">{li.quantity}</td>
+                                <td className="p-2.5 text-right font-mono">${Number(li.unit_price).toFixed(2)}</td>
+                                <td className="p-2.5 text-right font-mono font-bold text-foreground">
+                                  ${Number(li.amount).toFixed(2)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* Description */}
-              {selectedReceiptDetail.description && (
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-1">Business Purpose</h4>
-                  <p className="text-xs text-foreground bg-muted/20 p-3 rounded-lg border border-border">
-                    {selectedReceiptDetail.description}
-                  </p>
-                </div>
-              )}
-
-              {/* Line Items Table */}
-              {getSafeLineItems(selectedReceiptDetail.line_items).length > 0 && (
-                <div>
-                  <h4 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Itemized Breakdown</h4>
-                  <div className="border border-border rounded-lg overflow-hidden text-xs">
-                    <table className="w-full text-left">
-                      <thead className="bg-muted/40 text-muted-foreground border-b border-border">
-                        <tr>
-                          <th className="p-2">Item</th>
-                          <th className="p-2 text-center">Qty</th>
-                          <th className="p-2 text-right">Price</th>
-                          <th className="p-2 text-right">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-border">
-                        {getSafeLineItems(selectedReceiptDetail.line_items).map((li, i) => (
-                          <tr key={i}>
-                            <td className="p-2 text-foreground font-medium">{li.description}</td>
-                            <td className="p-2 text-center font-mono">{li.quantity}</td>
-                            <td className="p-2 text-right font-mono">${Number(li.unit_price).toFixed(2)}</td>
-                            <td className="p-2 text-right font-mono font-bold text-foreground">
-                              ${Number(li.amount).toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
               {/* Modal Footer Actions */}
-              <DialogFooter className="flex items-center justify-between sm:justify-between w-full pt-2">
+              <DialogFooter className="flex items-center justify-between sm:justify-between w-full pt-4 border-t border-border">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setSelectedReceiptDetail(null)}
-                  className="text-xs"
+                  className="text-xs rounded-xl"
                 >
                   Close
                 </Button>
                 <div className="flex gap-2">
                   <Button
-                    variant="secondary"
+                    variant="default"
                     size="sm"
                     onClick={() => {
                       loadExpenseIntoEditor(selectedReceiptDetail);
                       setSelectedReceiptDetail(null);
                     }}
-                    className="text-xs"
+                    className="text-xs rounded-xl gap-1.5 font-semibold"
                   >
-                    Edit in Zoho Form
+                    <Wrench className="w-3.5 h-3.5" />
+                    <span>Edit Expense</span>
                   </Button>
                 </div>
               </DialogFooter>
