@@ -35,6 +35,7 @@ import {
   RefreshCw,
   ChevronsUpDown,
   X,
+  ExternalLink,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -332,10 +333,12 @@ export default function ReceiptExpensePage() {
   };
 
   // ===================== FILE UPLOAD & OCR TRIGGER =====================
+  // ===================== FILE UPLOAD & AI OCR TRIGGER =====================
   const handleFileSelected = async (file: File) => {
     setAttachmentFile(file);
     setAttachmentName(file.name);
-    setAttachmentType(file.type || "application/octet-stream");
+    const mime = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "image/jpeg");
+    setAttachmentType(mime);
     setAttachmentSize(file.size);
     setPreviewZoom(1.0);
     setPreviewRotate(0);
@@ -344,13 +347,13 @@ export default function ReceiptExpensePage() {
     reader.onload = async (e) => {
       const dataUrl = e.target?.result as string;
       setAttachmentDataUrl(dataUrl);
-      // Auto-trigger OCR on selection
-      await triggerTesseractOcr(file, dataUrl);
+      // Automatically trigger multimodal extraction
+      await triggerReceiptExtraction(file, dataUrl);
     };
     reader.readAsDataURL(file);
   };
 
-  const triggerTesseractOcr = async (fileToScan?: File, dataUrlToScan?: string) => {
+  const triggerReceiptExtraction = async (fileToScan?: File, dataUrlToScan?: string) => {
     const targetFile = fileToScan || attachmentFile;
     const targetDataUrl = dataUrlToScan || attachmentDataUrl;
 
@@ -360,101 +363,147 @@ export default function ReceiptExpensePage() {
     }
 
     setIsOcrRunning(true);
-    setOcrProgress({ status: "Starting Tesseract OCR...", progress: 0.05 });
+    setOcrProgress({ status: "Extracting document with Gemini 2.5 Flash AI...", progress: 0.15 });
 
     try {
-      // 1. Run Client-side Tesseract OCR (with live WebWorker % progress)
-      const ocrResult = await runTesseractOcr(targetFile || targetDataUrl!, (progress) => {
-        setOcrProgress(progress);
+      // 1. Primary AI Engine: Upload to backend for PyMuPDF + Gemini 2.5 Flash Vision
+      const formData = new FormData();
+      if (targetFile) {
+        formData.append("file", targetFile);
+      } else if (targetDataUrl) {
+        const res = await fetch(targetDataUrl);
+        const blob = await res.blob();
+        formData.append("file", blob, attachmentName || "receipt.pdf");
+      }
+      if (formEventId && formEventId !== "all") {
+        formData.append("event_id", formEventId);
+      }
+
+      setOcrProgress({ status: "Analyzing receipt & itemization with Gemini...", progress: 0.55 });
+      const serverResult = await travelService.uploadAndExtractReceipt(formData);
+
+      if (serverResult) {
+        if (serverResult.merchant_name && serverResult.merchant_name !== "Unknown Vendor") {
+          setFormMerchant(serverResult.merchant_name);
+        }
+        if (serverResult.transaction_date) {
+          setFormDate(serverResult.transaction_date);
+        }
+        if (serverResult.total_amount && serverResult.total_amount > 0) {
+          setFormSpendAmount(serverResult.total_amount);
+        }
+        if (serverResult.tax_amount !== undefined) {
+          setFormTax(serverResult.tax_amount);
+        }
+        if (serverResult.tip_amount !== undefined) {
+          setFormTip(serverResult.tip_amount);
+        }
+        if (serverResult.currency) {
+          setFormCurrency(serverResult.currency);
+        }
+        if (serverResult.exchange_rate) {
+          setFormExchangeRate(serverResult.exchange_rate);
+        }
+        if (serverResult.expense_category) {
+          setFormCategory(serverResult.expense_category);
+        }
+        if (serverResult.policy) {
+          setFormPolicy(serverResult.policy);
+        }
+        if (serverResult.payment_method) {
+          setFormPayThrough(serverResult.payment_method);
+        }
+        if (serverResult.receipt_number) {
+          setFormReceiptNum(serverResult.receipt_number);
+        }
+        if (serverResult.description) {
+          setFormDescription(serverResult.description);
+        }
+        if (serverResult.line_items && serverResult.line_items.length > 0) {
+          setFormLineItems(serverResult.line_items);
+        }
+        if (serverResult.raw_extracted_text) {
+          setRawOcrText(serverResult.raw_extracted_text);
+        }
+        setOcrConfidence(serverResult.extraction_confidence || 98);
+        toast.success(`Extracted with Gemini AI (${serverResult.extraction_confidence || 98}% confidence)!`);
+        setMobilePane("form");
+        return;
+      }
+    } catch (serverErr: any) {
+      console.warn("Server AI extraction failed or offline, checking fallback:", serverErr);
+
+      // Fallback: If it's an image, attempt client-side Tesseract.js
+      const isPdf = attachmentType.includes("pdf") || targetFile?.name?.toLowerCase().endsWith(".pdf");
+      if (!isPdf && (targetFile || targetDataUrl)) {
+        try {
+          setOcrProgress({ status: "Falling back to local Tesseract OCR...", progress: 0.7 });
+          const ocrResult = await runTesseractOcr(targetFile || targetDataUrl!, (progress) => {
+            setOcrProgress(progress);
+          });
+          if (ocrResult.merchantName && ocrResult.merchantName !== "Unknown Vendor") setFormMerchant(ocrResult.merchantName);
+          if (ocrResult.transactionDate) setFormDate(ocrResult.transactionDate);
+          if (ocrResult.totalAmount && ocrResult.totalAmount > 0) setFormSpendAmount(ocrResult.totalAmount);
+          if (ocrResult.taxAmount !== undefined) setFormTax(ocrResult.taxAmount);
+          if (ocrResult.currency) setFormCurrency(ocrResult.currency);
+          if (ocrResult.category) setFormCategory(ocrResult.category);
+          if (ocrResult.policy) setFormPolicy(ocrResult.policy);
+          if (ocrResult.payThrough) setFormPayThrough(ocrResult.payThrough);
+          if (ocrResult.receiptNumber) setFormReceiptNum(ocrResult.receiptNumber);
+          if (ocrResult.description) setFormDescription(ocrResult.description);
+          if (ocrResult.lineItems) setFormLineItems(ocrResult.lineItems);
+          setRawOcrText(ocrResult.rawText);
+          setOcrConfidence(ocrResult.confidence);
+          toast.success("Extracted using client Tesseract OCR fallback.");
+          setMobilePane("form");
+          return;
+        } catch (tessErr) {
+          console.error("Tesseract client fallback error:", tessErr);
+        }
+      }
+      toast.error("Could not extract receipt automatically. You can enter details or click 'AI Refine'.");
+    } finally {
+      setIsOcrRunning(false);
+    }
+  };
+
+  const handleAiRefine = async () => {
+    setIsOcrRunning(true);
+    setOcrProgress({ status: "Refining with Gemini 2.5 Flash AI...", progress: 0.4 });
+    try {
+      const refined = await travelService.aiRefineReceipt({
+        raw_text: rawOcrText,
+        current_data: {
+          merchant_name: formMerchant,
+          transaction_date: formDate,
+          total_amount: formSpendAmount,
+          currency: formCurrency,
+          expense_category: formCategory,
+          receipt_number: formReceiptNum,
+          description: formDescription,
+          line_items: formLineItems,
+        },
+        notes_or_hint: formDescription || attachmentName,
       });
 
-      // Populate Zoho Expense fields from Tesseract Extraction
-      if (ocrResult.merchantName && ocrResult.merchantName !== "Unknown Vendor") {
-        setFormMerchant(ocrResult.merchantName);
+      if (refined) {
+        if (refined.merchant_name) setFormMerchant(refined.merchant_name);
+        if (refined.transaction_date) setFormDate(refined.transaction_date);
+        if (refined.total_amount && refined.total_amount > 0) setFormSpendAmount(refined.total_amount);
+        if (refined.tax_amount !== undefined) setFormTax(refined.tax_amount);
+        if (refined.tip_amount !== undefined) setFormTip(refined.tip_amount);
+        if (refined.currency) setFormCurrency(refined.currency);
+        if (refined.expense_category) setFormCategory(refined.expense_category);
+        if (refined.policy) setFormPolicy(refined.policy);
+        if (refined.payment_method) setFormPayThrough(refined.payment_method);
+        if (refined.receipt_number) setFormReceiptNum(refined.receipt_number);
+        if (refined.description) setFormDescription(refined.description);
+        if (refined.line_items && refined.line_items.length > 0) setFormLineItems(refined.line_items);
+        setOcrConfidence(refined.extraction_confidence || 99);
+        toast.success("Gemini AI refined and standardized receipt data!");
       }
-      if (ocrResult.transactionDate) {
-        setFormDate(ocrResult.transactionDate);
-      }
-      if (ocrResult.totalAmount && ocrResult.totalAmount > 0) {
-        setFormSpendAmount(ocrResult.totalAmount);
-      }
-      if (ocrResult.taxAmount !== undefined) {
-        setFormTax(ocrResult.taxAmount);
-      }
-      if (ocrResult.tipAmount !== undefined) {
-        setFormTip(ocrResult.tipAmount);
-      }
-      if (ocrResult.currency) {
-        setFormCurrency(ocrResult.currency);
-      }
-      if (ocrResult.exchangeRate) {
-        setFormExchangeRate(ocrResult.exchangeRate);
-      }
-      if (ocrResult.category) {
-        setFormCategory(ocrResult.category);
-      }
-      if (ocrResult.policy) {
-        setFormPolicy(ocrResult.policy);
-      }
-      if (ocrResult.payThrough) {
-        setFormPayThrough(ocrResult.payThrough);
-      }
-      if (ocrResult.receiptNumber) {
-        setFormReceiptNum(ocrResult.receiptNumber);
-      }
-      if (ocrResult.description) {
-        setFormDescription(ocrResult.description);
-      }
-      if (ocrResult.lineItems && ocrResult.lineItems.length > 0) {
-        setFormLineItems(ocrResult.lineItems);
-      }
-
-      setRawOcrText(ocrResult.rawText);
-      setOcrConfidence(ocrResult.confidence);
-      toast.success(`Tesseract OCR extracted receipt data (${ocrResult.confidence}% confidence)!`);
-      setMobilePane("form"); // on mobile, jump to form after scan
-    } catch (clientErr) {
-      console.warn("Client Tesseract encountered an issue, falling back to server-side parser:", clientErr);
-      setOcrProgress({ status: "Connecting to server OCR pipeline...", progress: 0.5 });
-
-      // Fallback: Post to backend OCR endpoint
-      try {
-        const formData = new FormData();
-        if (targetFile) {
-          formData.append("file", targetFile);
-        } else if (targetDataUrl) {
-          // Convert data URI to Blob
-          const res = await fetch(targetDataUrl);
-          const blob = await res.blob();
-          formData.append("file", blob, attachmentName || "receipt.jpg");
-        }
-        if (formEventId) {
-          formData.append("event_id", formEventId);
-        }
-
-        const serverResult = await travelService.uploadAndExtractReceipt(formData);
-        if (serverResult) {
-          setFormMerchant(serverResult.merchant_name || "");
-          setFormDate(serverResult.transaction_date || new Date().toISOString().split("T")[0]);
-          setFormSpendAmount(serverResult.total_amount || 0);
-          setFormTax(serverResult.tax_amount || 0);
-          setFormTip(serverResult.tip_amount || 0);
-          setFormCurrency(serverResult.currency || "USD");
-          setFormExchangeRate(serverResult.exchange_rate || 1.385);
-          setFormCategory(serverResult.expense_category || "other");
-          setFormPolicy(serverResult.policy || "Standard Corporate Travel Policy");
-          setFormPayThrough(serverResult.payment_method || "Company Corporate Card");
-          setFormReceiptNum(serverResult.receipt_number || "");
-          setFormDescription(serverResult.description || "");
-          setFormLineItems(serverResult.line_items || []);
-          setRawOcrText(serverResult.raw_extracted_text || "");
-          setOcrConfidence(serverResult.extraction_confidence || 95);
-          toast.success("Server-side OCR successfully recognized receipt attributes!");
-          setMobilePane("form");
-        }
-      } catch (serverErr: any) {
-        toast.error("Could not extract receipt. You can manually enter details.");
-      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "AI Refine failed. Check server connectivity.");
     } finally {
       setIsOcrRunning(false);
     }
@@ -827,10 +876,29 @@ export default function ReceiptExpensePage() {
                       {/* View Canvas */}
                       <div className="relative w-full h-[320px] sm:h-[400px] bg-neutral-900 rounded-xl overflow-hidden flex items-center justify-center border border-border shadow-inner">
                         {attachmentType.includes("pdf") ? (
-                          <div className="text-center p-6 text-neutral-300">
-                            <FileText className="w-12 h-12 mx-auto mb-2 text-indigo-400" />
-                            <div className="text-xs font-semibold">{attachmentName}</div>
-                            <p className="text-[11px] text-neutral-400 mt-1">PDF document attached</p>
+                          <div className="relative w-full h-full flex flex-col bg-neutral-950">
+                            <div className="flex items-center justify-between px-3 py-1.5 bg-neutral-800 text-neutral-300 text-[11px] border-b border-neutral-700 shrink-0">
+                              <div className="flex items-center gap-1.5 truncate">
+                                <FileText className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                                <span className="truncate">{attachmentName}</span>
+                              </div>
+                              <a
+                                href={attachmentDataUrl || "#"}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-indigo-400 hover:text-indigo-300 transition-colors"
+                              >
+                                <span>Pop-out</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </div>
+                            <div className="flex-1 w-full h-full relative">
+                              <iframe
+                                src={attachmentDataUrl || ""}
+                                title="PDF Document Preview"
+                                className="w-full h-full border-0 bg-neutral-900"
+                              />
+                            </div>
                           </div>
                         ) : (
                           <img
@@ -845,32 +913,32 @@ export default function ReceiptExpensePage() {
                         )}
 
                         {isOcrRunning && (
-                          <div className="absolute inset-0 bg-background/80 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3">
+                          <div className="absolute inset-0 bg-background/85 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center space-y-3 z-10">
                             <RefreshCw className="w-8 h-8 text-primary animate-spin" />
-                            <div className="text-xs font-bold text-foreground">Running Tesseract OCR...</div>
+                            <div className="text-xs font-bold text-foreground">Processing with Gemini AI & OCR...</div>
                             <div className="w-full max-w-xs bg-muted rounded-full h-2 overflow-hidden border border-border">
                               <div
                                 className="bg-primary h-full transition-all duration-300"
                                 style={{ width: `${Math.round((ocrProgress.progress || 0) * 100)}%` }}
                               />
                             </div>
-                            <p className="text-[11px] text-muted-foreground font-mono">{ocrProgress.status}</p>
+                            <p className="text-[11px] text-muted-foreground font-mono">{ocrProgress.status || "Extracting text & analyzing receipt structure..."}</p>
                           </div>
                         )}
                       </div>
 
-                      {/* Manual Tesseract Trigger Action */}
+                      {/* Manual Trigger Action */}
                       <div className="flex gap-2">
                         <Button
                           type="button"
                           variant="secondary"
                           size="sm"
-                          disabled={isOcrRunning}
-                          onClick={() => triggerTesseractOcr()}
+                          disabled={isOcrRunning || (!attachmentFile && !attachmentDataUrl)}
+                          onClick={() => triggerReceiptExtraction()}
                           className="w-full text-xs gap-1.5 font-semibold"
                         >
                           <Sparkles className="w-3.5 h-3.5 text-primary" />
-                          <span>Re-Scan with Tesseract OCR</span>
+                          <span>Extract with Gemini AI & OCR</span>
                         </Button>
                         <Button
                           type="button"
@@ -885,13 +953,13 @@ export default function ReceiptExpensePage() {
                     </div>
                   )}
 
-                  {/* Tesseract OCR Confidence & Raw Text Collapsible */}
+                  {/* OCR Confidence & Raw Text Collapsible */}
                   {rawOcrText && (
                     <div className="border border-border/80 rounded-xl p-3 bg-muted/20 text-xs space-y-2">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-1.5">
                           <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-                          <span className="font-semibold text-foreground">Tesseract OCR Verified</span>
+                          <span className="font-semibold text-foreground">Gemini AI & OCR Verified</span>
                         </div>
                         <Badge variant="outline" className="text-[11px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30">
                           {ocrConfidence}% Confidence
@@ -917,7 +985,7 @@ export default function ReceiptExpensePage() {
               </Card>
             </div>
 
-            {/* ================= RIGHT COLUMN: ZOHO EXPENSE DETAILED FORM ================= */}
+            {/* ================= RIGHT COLUMN: EXPENSE DETAILED FORM ================= */}
             <div className={`lg:col-span-7 space-y-6 ${mobilePane === "receipt" ? "hidden lg:block" : "block"}`}>
               <Card className="border-border shadow-xs">
                 <CardHeader className="p-4 sm:p-6 border-b border-border bg-card">
@@ -927,24 +995,40 @@ export default function ReceiptExpensePage() {
                         {editingReceiptId ? "Edit Expense Entry" : "Expense Details"}
                       </CardTitle>
                       <CardDescription className="text-xs">
-                        Review attributes extracted by Tesseract OCR or modify manual fields.
+                        Review attributes extracted by Gemini AI & OCR or modify manual fields.
                       </CardDescription>
                     </div>
 
-                    {/* Policy Compliance Pill */}
-                    <div
-                      className={`text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 border ${
-                        policyCompliance.status === "compliant"
-                          ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
-                          : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
-                      }`}
-                    >
-                      {policyCompliance.status === "compliant" ? (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                      ) : (
-                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                      )}
-                      <span>{policyCompliance.label}</span>
+                    <div className="flex items-center gap-2">
+                      {/* AI Refine (Gemini) Button */}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        onClick={handleAiRefine}
+                        disabled={isOcrRunning || (!rawOcrText && !formMerchant && formSpendAmount <= 0)}
+                        className="gap-1.5 text-xs rounded-lg border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 font-semibold shadow-2xs"
+                        title="Use Gemini 2.5 Flash to automatically detect missing fields, clean vendor names, parse line items and verify tax/currency"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
+                        <span>AI Refine (Gemini)</span>
+                      </Button>
+
+                      {/* Policy Compliance Pill */}
+                      <div
+                        className={`text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 border ${
+                          policyCompliance.status === "compliant"
+                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                            : "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                        }`}
+                      >
+                        {policyCompliance.status === "compliant" ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                        ) : (
+                          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                        )}
+                        <span>{policyCompliance.label}</span>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
