@@ -44,7 +44,8 @@ export const navigation: NavigationItem[] = [
       { label: "Drone Cargo & Coverage", path: "/travel/drone-cargo" },
       { label: "Vehicle & Seat Library", path: "/travel/vehicles" },
       { label: "Trip Calendar & Meeting Spots", path: "/travel/calendar" },
-      { label: "Receipts & Expense OCR", path: "/travel/receipts" },
+      { label: "Expenses", path: "/travel/receipts" },
+      { label: "Approvals", path: "/travel/approvals" },
     ],
   },
   {

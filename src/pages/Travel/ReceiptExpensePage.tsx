@@ -112,19 +112,17 @@ export default function ReceiptExpensePage() {
     return [];
   };
 
-  // Leadership role check (CEO, EA, Lead, Super Admin)
-  const isActualLeader = Boolean(
+  // Only Administrator can see all expenses among all users; requesters can only see their own expenses
+  const isAdministrator = Boolean(
     user?.is_super_admin ||
     roles?.some((r) =>
-      ["SUPER_ADMIN", "ADMIN", "EXECUTIVE", "CEO", "EA", "COORDINATOR", "MANAGER"].includes(r.code)
+      ["SUPER_ADMIN", "ADMIN"].includes(r.code?.toUpperCase())
     ) ||
-    user?.email?.toLowerCase().includes("ceo") ||
-    user?.email?.toLowerCase().includes("vanessa") ||
     user?.email?.toLowerCase().includes("admin")
   );
 
   const [perspectiveMode, setPerspectiveMode] = useState<"leadership" | "attendee">(
-    isActualLeader ? "leadership" : "attendee"
+    isAdministrator ? "leadership" : "attendee"
   );
 
   // Filter States
@@ -217,19 +215,19 @@ export default function ReceiptExpensePage() {
     queryFn: travelService.getEvents,
   });
 
-  const isAttendeeView = perspectiveMode === "attendee";
+  const isAttendeeView = !isAdministrator || perspectiveMode === "attendee";
   const effectiveEmail = isAttendeeView ? user?.email || "alex.rivera@zenatech.com" : undefined;
 
   // Query Receipts
   const { data: receiptsData, isLoading } = useQuery({
-    queryKey: ["travelReceipts", selectedEventId, statusFilter, categoryFilter, perspectiveMode, effectiveEmail],
+    queryKey: ["travelReceipts", selectedEventId, statusFilter, categoryFilter, perspectiveMode, effectiveEmail, isAdministrator],
     queryFn: () =>
       travelService.getReceipts({
         eventId: selectedEventId,
-        userEmail: effectiveEmail,
+        userEmail: isAdministrator && !isAttendeeView ? undefined : (user?.email || "alex.rivera@zenatech.com"),
         status: statusFilter,
         category: categoryFilter,
-        isAdminOverride: !isAttendeeView,
+        isAdminOverride: isAdministrator && !isAttendeeView,
       }),
   });
 
@@ -679,50 +677,65 @@ export default function ReceiptExpensePage() {
               <Receipt className="w-5 h-5" />
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Receipts & Expenses
+              Expenses
             </h1>
             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1.5 py-0.5">
               <Sparkles className="w-3 h-3 text-emerald-500 animate-pulse" />
-              Tesseract OCR Engine Ready
+              AI & OCR Engine Ready
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Multi-currency corporate expense management with client-side Tesseract OCR, real-time CAD conversion, and policy compliance verification.
+            Multi-currency corporate expense management with multimodal AI receipt extraction, real-time CAD conversion, and policy compliance verification.
           </p>
         </div>
 
         {/* Tab & Action Controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex bg-muted/60 p-1 rounded-xl border border-border">
-            <button
-              type="button"
-              onClick={() => {
-                setPerspectiveMode("leadership");
-                if (activeTab !== "list") setActiveTab("list");
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "list" && perspectiveMode === "leadership"
-                  ? "bg-card text-foreground shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              All Expenses {allCount !== undefined && allCount > 0 ? `(${allCount})` : `(${receiptsList.length})`}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPerspectiveMode("attendee");
-                if (activeTab !== "list") setActiveTab("list");
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "list" && perspectiveMode === "attendee"
-                  ? "bg-card text-foreground shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              My Expenses {myCount !== undefined && myCount > 0 ? `(${myCount})` : ""}
-            </button>
-          </div>
+          {isAdministrator ? (
+            <div className="flex bg-muted/60 p-1 rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setPerspectiveMode("leadership");
+                  if (activeTab !== "list") setActiveTab("list");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === "list" && perspectiveMode === "leadership"
+                    ? "bg-card text-foreground shadow-xs font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                All Expenses {allCount !== undefined && allCount > 0 ? `(${allCount})` : `(${receiptsList.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPerspectiveMode("attendee");
+                  if (activeTab !== "list") setActiveTab("list");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === "list" && perspectiveMode === "attendee"
+                    ? "bg-card text-foreground shadow-xs font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                My Expenses {myCount !== undefined && myCount > 0 ? `(${myCount})` : ""}
+              </button>
+            </div>
+          ) : (
+            <div className="flex bg-muted/60 p-1 rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setPerspectiveMode("attendee");
+                  if (activeTab !== "list") setActiveTab("list");
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-card text-foreground shadow-xs"
+              >
+                My Expenses ({receiptsList.length})
+              </button>
+            </div>
+          )}
 
           {activeTab === "list" && (
             <Button
@@ -1812,15 +1825,14 @@ export default function ReceiptExpensePage() {
               {/* Desktop Data Table */}
               <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden shadow-xs">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[980px]">
+                  <table className="w-full text-left text-xs min-w-[880px]">
                     <thead className="bg-muted/40 border-b border-border text-muted-foreground font-semibold">
                       <tr>
-                        <th className="p-3 w-12 text-center whitespace-nowrap">Receipt</th>
                         <th className="p-3 whitespace-nowrap min-w-[240px]">Date & Merchant</th>
-                        <th className="p-3 whitespace-nowrap min-w-[190px]">Category & Policy</th>
-                        <th className="p-3 whitespace-nowrap min-w-[180px]">Pay Through</th>
-                        <th className="p-3 text-right whitespace-nowrap min-w-[130px]">Amount (Original)</th>
-                        <th className="p-3 text-right whitespace-nowrap min-w-[140px]">Amount in (CAD)</th>
+                        <th className="p-3 whitespace-nowrap min-w-[180px]">Category & Policy</th>
+                        <th className="p-3 whitespace-nowrap min-w-[160px]">Pay Through</th>
+                        <th className="p-3 text-right whitespace-nowrap min-w-[140px]">Amount</th>
+                        <th className="p-3 text-right whitespace-nowrap min-w-[150px]">To Be Reimbursed</th>
                         <th className="p-3 text-center whitespace-nowrap min-w-[130px]">Status</th>
                       </tr>
                     </thead>
@@ -1840,23 +1852,6 @@ export default function ReceiptExpensePage() {
                             className="hover:bg-muted/40 transition-colors cursor-pointer group"
                             title="Click row to view expense details"
                           >
-                            {/* Receipt Thumbnail */}
-                            <td className="p-3 text-center whitespace-nowrap">
-                              {rec.file_data ? (
-                                <div className="w-9 h-9 rounded-lg overflow-hidden border border-border group-hover:border-primary transition-all inline-block shadow-2xs">
-                                  <img
-                                    src={rec.file_data}
-                                    alt="Receipt"
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                              ) : (
-                                <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground mx-auto">
-                                  <Receipt className="w-4 h-4" />
-                                </div>
-                              )}
-                            </td>
-
                             {/* Date & Merchant */}
                             <td className="p-3 whitespace-nowrap min-w-[240px]">
                               <div className="font-bold text-foreground text-sm flex items-center gap-1.5 whitespace-nowrap group-hover:text-primary transition-colors">
@@ -1875,7 +1870,7 @@ export default function ReceiptExpensePage() {
                             </td>
 
                             {/* Category & Policy */}
-                            <td className="p-3 whitespace-nowrap min-w-[190px]">
+                            <td className="p-3 whitespace-nowrap min-w-[180px]">
                               <div className="flex items-center gap-1.5 font-medium text-foreground whitespace-nowrap">
                                 <CatIcon className="w-3.5 h-3.5 text-primary shrink-0" />
                                 <span className="whitespace-nowrap">{catMeta.label}</span>
@@ -1886,32 +1881,45 @@ export default function ReceiptExpensePage() {
                             </td>
 
                             {/* Pay Through */}
-                            <td className="p-3 whitespace-nowrap min-w-[180px]">
+                            <td className="p-3 whitespace-nowrap min-w-[160px]">
                               <div className="text-foreground font-medium text-xs flex items-center gap-1.5 whitespace-nowrap">
                                 <CreditCard className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                                 <span className="whitespace-nowrap">{rec.payment_method || "Corporate Card"}</span>
                               </div>
-                              {rec.is_reimbursable && (
-                                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold block mt-0.5 whitespace-nowrap">
-                                  Reimbursable to Employee
-                                </span>
-                              )}
                             </td>
 
-                            {/* Amount Original */}
-                            <td className="p-3 text-right font-mono text-muted-foreground whitespace-nowrap min-w-[130px]">
-                              ${Number(rec.total_amount).toFixed(2)} {rec.currency}
-                            </td>
-
-                            {/* Amount in (CAD) */}
+                            {/* Combined Amount (CAD & Original) */}
                             <td className="p-3 text-right whitespace-nowrap min-w-[140px]">
                               <div className="font-mono font-bold text-foreground text-sm whitespace-nowrap">
                                 ${cadVal.toFixed(2)} CAD
                               </div>
-                              {rec.currency !== "CAD" && (
-                                <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap block">
-                                  @ {Number(rec.exchange_rate || 1.385).toFixed(4)}
-                                </span>
+                              {rec.currency !== "CAD" ? (
+                                <div className="text-[11px] text-muted-foreground font-mono whitespace-nowrap">
+                                  ${Number(rec.total_amount).toFixed(2)} {rec.currency}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">
+                                  CAD Direct
+                                </div>
+                              )}
+                            </td>
+
+                            {/* To Be Reimbursed */}
+                            <td className="p-3 text-right whitespace-nowrap min-w-[150px]">
+                              {rec.is_reimbursable ? (
+                                <div className="whitespace-nowrap">
+                                  <div className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs">
+                                    ${cadVal.toFixed(2)} CAD
+                                  </div>
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                    <CheckCircle2 className="w-2.5 h-2.5" /> Due to Employee
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="whitespace-nowrap">
+                                  <span className="font-mono text-muted-foreground text-xs">$0.00 CAD</span>
+                                  <span className="text-[10px] text-muted-foreground block">Direct Corp Card</span>
+                                </div>
                               )}
                             </td>
 
@@ -1979,23 +1987,40 @@ export default function ReceiptExpensePage() {
                           </span>
                         </div>
 
-                        {/* Amount Strip */}
+                        {/* Amount & Reimbursed Strip */}
                         <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border">
                           <div>
                             <span className="text-[10px] text-muted-foreground uppercase font-semibold block">
-                              Amount in CAD
+                              Amount
                             </span>
                             <span className="text-base font-bold font-mono text-foreground">
                               ${cadVal.toFixed(2)} CAD
                             </span>
+                            {rec.currency !== "CAD" && (
+                              <span className="text-[10px] text-muted-foreground block font-mono">
+                                ${Number(rec.total_amount).toFixed(2)} {rec.currency}
+                              </span>
+                            )}
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] text-muted-foreground block font-mono">
-                              ${Number(rec.total_amount).toFixed(2)} {rec.currency}
+                            <span className="text-[10px] text-muted-foreground uppercase font-semibold block">
+                              To Be Reimbursed
                             </span>
-                            <span className="text-[10px] font-mono text-muted-foreground">
-                              Rate: {Number(rec.exchange_rate || 1.385).toFixed(4)}
-                            </span>
+                            {rec.is_reimbursable ? (
+                              <div>
+                                <span className="text-sm font-bold font-mono text-indigo-600 dark:text-indigo-400 block">
+                                  ${cadVal.toFixed(2)} CAD
+                                </span>
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                                  Employee Due
+                                </span>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="text-xs font-mono text-muted-foreground block">$0.00 CAD</span>
+                                <span className="text-[10px] text-muted-foreground">Corp Card</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 

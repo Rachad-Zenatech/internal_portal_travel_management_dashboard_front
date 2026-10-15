@@ -52,6 +52,9 @@ export default function Breadcrumbs() {
       configuration: "Configuration",
       configurations: "Configurations",
       dashboard: "Dashboard",
+      receipts: "Expenses",
+      expenses: "Expenses",
+      approvals: "Approvals",
     };
     const key = name.toLowerCase();
     if (specialNames[key]) {
