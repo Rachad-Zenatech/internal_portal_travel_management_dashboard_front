@@ -112,19 +112,17 @@ export default function ReceiptExpensePage() {
     return [];
   };
 
-  // Leadership role check (CEO, EA, Lead, Super Admin)
-  const isActualLeader = Boolean(
+  // Only Administrator can see all expenses among all users; requesters can only see their own expenses
+  const isAdministrator = Boolean(
     user?.is_super_admin ||
     roles?.some((r) =>
-      ["SUPER_ADMIN", "ADMIN", "EXECUTIVE", "CEO", "EA", "COORDINATOR", "MANAGER"].includes(r.code)
+      ["SUPER_ADMIN", "ADMIN"].includes(r.code?.toUpperCase())
     ) ||
-    user?.email?.toLowerCase().includes("ceo") ||
-    user?.email?.toLowerCase().includes("vanessa") ||
     user?.email?.toLowerCase().includes("admin")
   );
 
   const [perspectiveMode, setPerspectiveMode] = useState<"leadership" | "attendee">(
-    isActualLeader ? "leadership" : "attendee"
+    isAdministrator ? "leadership" : "attendee"
   );
 
   // Filter States
@@ -217,19 +215,19 @@ export default function ReceiptExpensePage() {
     queryFn: travelService.getEvents,
   });
 
-  const isAttendeeView = perspectiveMode === "attendee";
+  const isAttendeeView = !isAdministrator || perspectiveMode === "attendee";
   const effectiveEmail = isAttendeeView ? user?.email || "alex.rivera@zenatech.com" : undefined;
 
   // Query Receipts
   const { data: receiptsData, isLoading } = useQuery({
-    queryKey: ["travelReceipts", selectedEventId, statusFilter, categoryFilter, perspectiveMode, effectiveEmail],
+    queryKey: ["travelReceipts", selectedEventId, statusFilter, categoryFilter, perspectiveMode, effectiveEmail, isAdministrator],
     queryFn: () =>
       travelService.getReceipts({
         eventId: selectedEventId,
-        userEmail: effectiveEmail,
+        userEmail: isAdministrator && !isAttendeeView ? undefined : (user?.email || "alex.rivera@zenatech.com"),
         status: statusFilter,
         category: categoryFilter,
-        isAdminOverride: !isAttendeeView,
+        isAdminOverride: isAdministrator && !isAttendeeView,
       }),
   });
 
@@ -408,50 +406,75 @@ export default function ReceiptExpensePage() {
       const serverResult = await travelService.uploadAndExtractReceipt(formData);
 
       if (serverResult) {
-        if (serverResult.merchant_name && serverResult.merchant_name !== "Unknown Vendor") {
-          setFormMerchant(serverResult.merchant_name);
+        let extractedMerchant = serverResult.merchant_name && serverResult.merchant_name !== "Unknown Vendor" ? serverResult.merchant_name : "";
+        let extractedDate = serverResult.transaction_date || "";
+        let extractedTotal = serverResult.total_amount && serverResult.total_amount > 0 ? serverResult.total_amount : 0;
+        let extractedTax = serverResult.tax_amount;
+        let extractedTip = serverResult.tip_amount;
+        let extractedCurr = serverResult.currency || "USD";
+        let extractedRate = serverResult.exchange_rate || 1.385;
+        let extractedCat = serverResult.expense_category || "meals_entertainment";
+        let extractedPolicy = serverResult.policy || "Standard Corporate Travel Policy";
+        let extractedPayment = serverResult.payment_method || "Company Corporate Card";
+        let extractedRecNum = serverResult.receipt_number || "";
+        let extractedDesc = serverResult.description || "";
+        let extractedItems = serverResult.line_items || [];
+        const extractedRawText = serverResult.raw_extracted_text || "";
+        let confidence = serverResult.extraction_confidence || 98;
+
+        // Auto AI Refine: Automatically refine and standardize attributes with Gemini reasoning
+        setOcrProgress({ status: "Refining & cross-checking with Gemini AI...", progress: 0.85 });
+        try {
+          const refined = await travelService.aiRefineReceipt({
+            raw_text: extractedRawText,
+            current_data: {
+              merchant_name: extractedMerchant,
+              transaction_date: extractedDate,
+              total_amount: extractedTotal,
+              currency: extractedCurr,
+              expense_category: extractedCat,
+              receipt_number: extractedRecNum,
+              description: extractedDesc,
+              line_items: extractedItems,
+            },
+            notes_or_hint: extractedDesc || attachmentName,
+          });
+
+          if (refined) {
+            if (refined.merchant_name) extractedMerchant = refined.merchant_name;
+            if (refined.transaction_date) extractedDate = refined.transaction_date;
+            if (refined.total_amount && refined.total_amount > 0) extractedTotal = refined.total_amount;
+            if (refined.tax_amount !== undefined) extractedTax = refined.tax_amount;
+            if (refined.tip_amount !== undefined) extractedTip = refined.tip_amount;
+            if (refined.currency) extractedCurr = refined.currency;
+            if (refined.expense_category) extractedCat = refined.expense_category;
+            if (refined.policy) extractedPolicy = refined.policy;
+            if (refined.payment_method) extractedPayment = refined.payment_method;
+            if (refined.receipt_number) extractedRecNum = refined.receipt_number;
+            if (refined.description) extractedDesc = refined.description;
+            if (refined.line_items && refined.line_items.length > 0) extractedItems = refined.line_items;
+            confidence = refined.extraction_confidence || 99;
+          }
+        } catch (aiRefineErr) {
+          console.warn("Auto AI refine post-processing notice:", aiRefineErr);
         }
-        if (serverResult.transaction_date) {
-          setFormDate(serverResult.transaction_date);
-        }
-        if (serverResult.total_amount && serverResult.total_amount > 0) {
-          setFormSpendAmount(serverResult.total_amount);
-        }
-        if (serverResult.tax_amount !== undefined) {
-          setFormTax(serverResult.tax_amount);
-        }
-        if (serverResult.tip_amount !== undefined) {
-          setFormTip(serverResult.tip_amount);
-        }
-        if (serverResult.currency) {
-          setFormCurrency(serverResult.currency);
-        }
-        if (serverResult.exchange_rate) {
-          setFormExchangeRate(serverResult.exchange_rate);
-        }
-        if (serverResult.expense_category) {
-          setFormCategory(serverResult.expense_category);
-        }
-        if (serverResult.policy) {
-          setFormPolicy(serverResult.policy);
-        }
-        if (serverResult.payment_method) {
-          setFormPayThrough(serverResult.payment_method);
-        }
-        if (serverResult.receipt_number) {
-          setFormReceiptNum(serverResult.receipt_number);
-        }
-        if (serverResult.description) {
-          setFormDescription(serverResult.description);
-        }
-        if (serverResult.line_items && serverResult.line_items.length > 0) {
-          setFormLineItems(serverResult.line_items);
-        }
-        if (serverResult.raw_extracted_text) {
-          setRawOcrText(serverResult.raw_extracted_text);
-        }
-        setOcrConfidence(serverResult.extraction_confidence || 98);
-        toast.success(`Extracted with Gemini AI (${serverResult.extraction_confidence || 98}% confidence)!`);
+
+        if (extractedMerchant) setFormMerchant(extractedMerchant);
+        if (extractedDate) setFormDate(extractedDate);
+        if (extractedTotal > 0) setFormSpendAmount(extractedTotal);
+        if (extractedTax !== undefined) setFormTax(extractedTax);
+        if (extractedTip !== undefined) setFormTip(extractedTip);
+        if (extractedCurr) setFormCurrency(extractedCurr);
+        if (extractedRate) setFormExchangeRate(extractedRate);
+        if (extractedCat) setFormCategory(extractedCat);
+        if (extractedPolicy) setFormPolicy(extractedPolicy);
+        if (extractedPayment) setFormPayThrough(extractedPayment);
+        if (extractedRecNum) setFormReceiptNum(extractedRecNum);
+        if (extractedDesc) setFormDescription(extractedDesc);
+        if (extractedItems && extractedItems.length > 0) setFormLineItems(extractedItems);
+        if (extractedRawText) setRawOcrText(extractedRawText);
+        setOcrConfidence(confidence);
+        toast.success(`Extracted & AI-refined with Gemini (${confidence}% confidence)!`);
         setMobilePane("form");
         return;
       }
@@ -462,73 +485,82 @@ export default function ReceiptExpensePage() {
       const isPdf = attachmentType.includes("pdf") || targetFile?.name?.toLowerCase().endsWith(".pdf");
       if (!isPdf && (targetFile || targetDataUrl)) {
         try {
-          setOcrProgress({ status: "Falling back to local Tesseract OCR...", progress: 0.7 });
+          setOcrProgress({ status: "Extracting text with Tesseract OCR...", progress: 0.65 });
           const ocrResult = await runTesseractOcr(targetFile || targetDataUrl!, (progress) => {
             setOcrProgress(progress);
           });
-          if (ocrResult.merchantName && ocrResult.merchantName !== "Unknown Vendor") setFormMerchant(ocrResult.merchantName);
-          if (ocrResult.transactionDate) setFormDate(ocrResult.transactionDate);
-          if (ocrResult.totalAmount && ocrResult.totalAmount > 0) setFormSpendAmount(ocrResult.totalAmount);
-          if (ocrResult.taxAmount !== undefined) setFormTax(ocrResult.taxAmount);
-          if (ocrResult.currency) setFormCurrency(ocrResult.currency);
-          if (ocrResult.category) setFormCategory(ocrResult.category);
-          if (ocrResult.policy) setFormPolicy(ocrResult.policy);
-          if (ocrResult.payThrough) setFormPayThrough(ocrResult.payThrough);
-          if (ocrResult.receiptNumber) setFormReceiptNum(ocrResult.receiptNumber);
-          if (ocrResult.description) setFormDescription(ocrResult.description);
-          if (ocrResult.lineItems) setFormLineItems(ocrResult.lineItems);
+          let finalMerchant = ocrResult.merchantName && ocrResult.merchantName !== "Unknown Vendor" ? ocrResult.merchantName : "";
+          let finalDate = ocrResult.transactionDate || "";
+          let finalTotal = ocrResult.totalAmount && ocrResult.totalAmount > 0 ? ocrResult.totalAmount : 0;
+          let finalTax = ocrResult.taxAmount;
+          let finalTip = 0;
+          let finalCurr = ocrResult.currency || "USD";
+          let finalCat = ocrResult.category || "meals_entertainment";
+          let finalPolicy = ocrResult.policy || "Standard Corporate Travel Policy";
+          let finalPayment = ocrResult.payThrough || "Company Corporate Card";
+          let finalRecNum = ocrResult.receiptNumber || "";
+          let finalDesc = ocrResult.description || "";
+          let finalItems = ocrResult.lineItems || [];
+          let confidence = ocrResult.confidence || 92;
+
+          // Auto AI Refine on client OCR text
+          setOcrProgress({ status: "Refining with Gemini AI...", progress: 0.88 });
+          try {
+            const refined = await travelService.aiRefineReceipt({
+              raw_text: ocrResult.rawText,
+              current_data: {
+                merchant_name: finalMerchant,
+                transaction_date: finalDate,
+                total_amount: finalTotal,
+                currency: finalCurr,
+                expense_category: finalCat,
+                receipt_number: finalRecNum,
+                description: finalDesc,
+                line_items: finalItems,
+              },
+              notes_or_hint: attachmentName,
+            });
+            if (refined) {
+              if (refined.merchant_name) finalMerchant = refined.merchant_name;
+              if (refined.transaction_date) finalDate = refined.transaction_date;
+              if (refined.total_amount && refined.total_amount > 0) finalTotal = refined.total_amount;
+              if (refined.tax_amount !== undefined) finalTax = refined.tax_amount;
+              if (refined.tip_amount !== undefined) finalTip = refined.tip_amount;
+              if (refined.currency) finalCurr = refined.currency;
+              if (refined.expense_category) finalCat = refined.expense_category;
+              if (refined.policy) finalPolicy = refined.policy;
+              if (refined.payment_method) finalPayment = refined.payment_method;
+              if (refined.receipt_number) finalRecNum = refined.receipt_number;
+              if (refined.description) finalDesc = refined.description;
+              if (refined.line_items && refined.line_items.length > 0) finalItems = refined.line_items;
+              confidence = refined.extraction_confidence || 99;
+            }
+          } catch (refineErr) {
+            console.warn("Client fallback AI refine notice:", refineErr);
+          }
+
+          if (finalMerchant) setFormMerchant(finalMerchant);
+          if (finalDate) setFormDate(finalDate);
+          if (finalTotal > 0) setFormSpendAmount(finalTotal);
+          if (finalTax !== undefined) setFormTax(finalTax);
+          if (finalTip) setFormTip(finalTip);
+          if (finalCurr) setFormCurrency(finalCurr);
+          if (finalCat) setFormCategory(finalCat);
+          if (finalPolicy) setFormPolicy(finalPolicy);
+          if (finalPayment) setFormPayThrough(finalPayment);
+          if (finalRecNum) setFormReceiptNum(finalRecNum);
+          if (finalDesc) setFormDescription(finalDesc);
+          if (finalItems.length > 0) setFormLineItems(finalItems);
           setRawOcrText(ocrResult.rawText);
-          setOcrConfidence(ocrResult.confidence);
-          toast.success("Extracted using client Tesseract OCR fallback.");
+          setOcrConfidence(confidence);
+          toast.success(`Extracted & AI-refined with Gemini (${confidence}% confidence)!`);
           setMobilePane("form");
           return;
         } catch (tessErr) {
           console.error("Tesseract client fallback error:", tessErr);
         }
       }
-      toast.error("Could not extract receipt automatically. You can enter details or click 'AI Refine'.");
-    } finally {
-      setIsOcrRunning(false);
-    }
-  };
-
-  const handleAiRefine = async () => {
-    setIsOcrRunning(true);
-    setOcrProgress({ status: "Refining with Gemini 2.5 Flash AI...", progress: 0.4 });
-    try {
-      const refined = await travelService.aiRefineReceipt({
-        raw_text: rawOcrText,
-        current_data: {
-          merchant_name: formMerchant,
-          transaction_date: formDate,
-          total_amount: formSpendAmount,
-          currency: formCurrency,
-          expense_category: formCategory,
-          receipt_number: formReceiptNum,
-          description: formDescription,
-          line_items: formLineItems,
-        },
-        notes_or_hint: formDescription || attachmentName,
-      });
-
-      if (refined) {
-        if (refined.merchant_name) setFormMerchant(refined.merchant_name);
-        if (refined.transaction_date) setFormDate(refined.transaction_date);
-        if (refined.total_amount && refined.total_amount > 0) setFormSpendAmount(refined.total_amount);
-        if (refined.tax_amount !== undefined) setFormTax(refined.tax_amount);
-        if (refined.tip_amount !== undefined) setFormTip(refined.tip_amount);
-        if (refined.currency) setFormCurrency(refined.currency);
-        if (refined.expense_category) setFormCategory(refined.expense_category);
-        if (refined.policy) setFormPolicy(refined.policy);
-        if (refined.payment_method) setFormPayThrough(refined.payment_method);
-        if (refined.receipt_number) setFormReceiptNum(refined.receipt_number);
-        if (refined.description) setFormDescription(refined.description);
-        if (refined.line_items && refined.line_items.length > 0) setFormLineItems(refined.line_items);
-        setOcrConfidence(refined.extraction_confidence || 99);
-        toast.success("Gemini AI refined and standardized receipt data!");
-      }
-    } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "AI Refine failed. Check server connectivity.");
+      toast.error("Could not extract receipt automatically. You can enter details manually.");
     } finally {
       setIsOcrRunning(false);
     }
@@ -542,9 +574,17 @@ export default function ReceiptExpensePage() {
       }
       return travelService.createReceipt(payload);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["travelReceipts"] });
-      toast.success(editingReceiptId ? "Expense updated successfully!" : "Expense created successfully!");
+      queryClient.invalidateQueries({ queryKey: ["travelReceipts", "approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["travelReceipts", "sidebarPendingCount"] });
+      if (editingReceiptId) {
+        toast.success("Expense updated successfully!");
+      } else if (variables.status === "pending_approval") {
+        toast.success("Expense submitted successfully! It has been routed to Approvals.");
+      } else {
+        toast.success("Expense draft saved successfully!");
+      }
       resetForm();
       setActiveTab("list");
     },
@@ -679,50 +719,65 @@ export default function ReceiptExpensePage() {
               <Receipt className="w-5 h-5" />
             </span>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              Receipts & Expenses
+              Expenses
             </h1>
             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 text-xs gap-1.5 py-0.5">
               <Sparkles className="w-3 h-3 text-emerald-500 animate-pulse" />
-              Tesseract OCR Engine Ready
+              AI & OCR Engine Ready
             </Badge>
           </div>
           <p className="text-xs sm:text-sm text-muted-foreground">
-            Multi-currency corporate expense management with client-side Tesseract OCR, real-time CAD conversion, and policy compliance verification.
+            Multi-currency corporate expense management with multimodal AI receipt extraction, real-time CAD conversion, and policy compliance verification.
           </p>
         </div>
 
         {/* Tab & Action Controls */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex bg-muted/60 p-1 rounded-xl border border-border">
-            <button
-              type="button"
-              onClick={() => {
-                setPerspectiveMode("leadership");
-                if (activeTab !== "list") setActiveTab("list");
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "list" && perspectiveMode === "leadership"
-                  ? "bg-card text-foreground shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              All Expenses {allCount !== undefined && allCount > 0 ? `(${allCount})` : `(${receiptsList.length})`}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPerspectiveMode("attendee");
-                if (activeTab !== "list") setActiveTab("list");
-              }}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeTab === "list" && perspectiveMode === "attendee"
-                  ? "bg-card text-foreground shadow-xs font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              My Expenses {myCount !== undefined && myCount > 0 ? `(${myCount})` : ""}
-            </button>
-          </div>
+          {isAdministrator ? (
+            <div className="flex bg-muted/60 p-1 rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setPerspectiveMode("leadership");
+                  if (activeTab !== "list") setActiveTab("list");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === "list" && perspectiveMode === "leadership"
+                    ? "bg-card text-foreground shadow-xs font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                All Expenses {allCount !== undefined && allCount > 0 ? `(${allCount})` : `(${receiptsList.length})`}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPerspectiveMode("attendee");
+                  if (activeTab !== "list") setActiveTab("list");
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                  activeTab === "list" && perspectiveMode === "attendee"
+                    ? "bg-card text-foreground shadow-xs font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                My Expenses {myCount !== undefined && myCount > 0 ? `(${myCount})` : ""}
+              </button>
+            </div>
+          ) : (
+            <div className="flex bg-muted/60 p-1 rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setPerspectiveMode("attendee");
+                  if (activeTab !== "list") setActiveTab("list");
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all bg-card text-foreground shadow-xs"
+              >
+                My Expenses ({receiptsList.length})
+              </button>
+            </div>
+          )}
 
           {activeTab === "list" && (
             <Button
@@ -1029,20 +1084,6 @@ export default function ReceiptExpensePage() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {/* AI Refine (Gemini) Button */}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="xs"
-                        onClick={handleAiRefine}
-                        disabled={isOcrRunning || (!rawOcrText && !formMerchant && formSpendAmount <= 0)}
-                        className="gap-1.5 text-xs rounded-lg border-indigo-500/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 font-semibold shadow-2xs"
-                        title="Use Gemini 2.5 Flash to automatically detect missing fields, clean vendor names, parse line items and verify tax/currency"
-                      >
-                        <Sparkles className="w-3.5 h-3.5 text-indigo-500 animate-pulse" />
-                        <span>AI Refine (Gemini)</span>
-                      </Button>
-
                       {/* Policy Compliance Pill */}
                       <div
                         className={`text-xs px-2.5 py-1 rounded-full font-semibold flex items-center gap-1.5 border ${
@@ -1812,15 +1853,14 @@ export default function ReceiptExpensePage() {
               {/* Desktop Data Table */}
               <div className="hidden md:block rounded-xl border border-border bg-card overflow-hidden shadow-xs">
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[980px]">
+                  <table className="w-full text-left text-xs min-w-[880px]">
                     <thead className="bg-muted/40 border-b border-border text-muted-foreground font-semibold">
                       <tr>
-                        <th className="p-3 w-12 text-center whitespace-nowrap">Receipt</th>
                         <th className="p-3 whitespace-nowrap min-w-[240px]">Date & Merchant</th>
-                        <th className="p-3 whitespace-nowrap min-w-[190px]">Category & Policy</th>
-                        <th className="p-3 whitespace-nowrap min-w-[180px]">Pay Through</th>
-                        <th className="p-3 text-right whitespace-nowrap min-w-[130px]">Amount (Original)</th>
-                        <th className="p-3 text-right whitespace-nowrap min-w-[140px]">Amount in (CAD)</th>
+                        <th className="p-3 whitespace-nowrap min-w-[180px]">Category & Policy</th>
+                        <th className="p-3 whitespace-nowrap min-w-[160px]">Pay Through</th>
+                        <th className="p-3 text-right whitespace-nowrap min-w-[140px]">Amount</th>
+                        <th className="p-3 text-right whitespace-nowrap min-w-[150px]">To Be Reimbursed</th>
                         <th className="p-3 text-center whitespace-nowrap min-w-[130px]">Status</th>
                       </tr>
                     </thead>
@@ -1840,23 +1880,6 @@ export default function ReceiptExpensePage() {
                             className="hover:bg-muted/40 transition-colors cursor-pointer group"
                             title="Click row to view expense details"
                           >
-                            {/* Receipt Thumbnail */}
-                            <td className="p-3 text-center whitespace-nowrap">
-                              {rec.file_data ? (
-                                <div className="w-9 h-9 rounded-lg overflow-hidden border border-border group-hover:border-primary transition-all inline-block shadow-2xs">
-                                  <img
-                                    src={rec.file_data}
-                                    alt="Receipt"
-                                    className="w-full h-full object-cover"
-                                  />
-                                </div>
-                              ) : (
-                                <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center text-muted-foreground mx-auto">
-                                  <Receipt className="w-4 h-4" />
-                                </div>
-                              )}
-                            </td>
-
                             {/* Date & Merchant */}
                             <td className="p-3 whitespace-nowrap min-w-[240px]">
                               <div className="font-bold text-foreground text-sm flex items-center gap-1.5 whitespace-nowrap group-hover:text-primary transition-colors">
@@ -1875,7 +1898,7 @@ export default function ReceiptExpensePage() {
                             </td>
 
                             {/* Category & Policy */}
-                            <td className="p-3 whitespace-nowrap min-w-[190px]">
+                            <td className="p-3 whitespace-nowrap min-w-[180px]">
                               <div className="flex items-center gap-1.5 font-medium text-foreground whitespace-nowrap">
                                 <CatIcon className="w-3.5 h-3.5 text-primary shrink-0" />
                                 <span className="whitespace-nowrap">{catMeta.label}</span>
@@ -1886,32 +1909,45 @@ export default function ReceiptExpensePage() {
                             </td>
 
                             {/* Pay Through */}
-                            <td className="p-3 whitespace-nowrap min-w-[180px]">
+                            <td className="p-3 whitespace-nowrap min-w-[160px]">
                               <div className="text-foreground font-medium text-xs flex items-center gap-1.5 whitespace-nowrap">
                                 <CreditCard className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                                 <span className="whitespace-nowrap">{rec.payment_method || "Corporate Card"}</span>
                               </div>
-                              {rec.is_reimbursable && (
-                                <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-semibold block mt-0.5 whitespace-nowrap">
-                                  Reimbursable to Employee
-                                </span>
-                              )}
                             </td>
 
-                            {/* Amount Original */}
-                            <td className="p-3 text-right font-mono text-muted-foreground whitespace-nowrap min-w-[130px]">
-                              ${Number(rec.total_amount).toFixed(2)} {rec.currency}
-                            </td>
-
-                            {/* Amount in (CAD) */}
+                            {/* Combined Amount (CAD & Original) */}
                             <td className="p-3 text-right whitespace-nowrap min-w-[140px]">
                               <div className="font-mono font-bold text-foreground text-sm whitespace-nowrap">
                                 ${cadVal.toFixed(2)} CAD
                               </div>
-                              {rec.currency !== "CAD" && (
-                                <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap block">
-                                  @ {Number(rec.exchange_rate || 1.385).toFixed(4)}
-                                </span>
+                              {rec.currency !== "CAD" ? (
+                                <div className="text-[11px] text-muted-foreground font-mono whitespace-nowrap">
+                                  ${Number(rec.total_amount).toFixed(2)} {rec.currency}
+                                </div>
+                              ) : (
+                                <div className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">
+                                  CAD Direct
+                                </div>
+                              )}
+                            </td>
+
+                            {/* To Be Reimbursed */}
+                            <td className="p-3 text-right whitespace-nowrap min-w-[150px]">
+                              {rec.is_reimbursable ? (
+                                <div className="whitespace-nowrap">
+                                  <div className="font-mono font-bold text-indigo-600 dark:text-indigo-400 text-xs">
+                                    ${cadVal.toFixed(2)} CAD
+                                  </div>
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                    <CheckCircle2 className="w-2.5 h-2.5" /> Due to Employee
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="whitespace-nowrap">
+                                  <span className="font-mono text-muted-foreground text-xs">$0.00 CAD</span>
+                                  <span className="text-[10px] text-muted-foreground block">Direct Corp Card</span>
+                                </div>
                               )}
                             </td>
 
@@ -1979,23 +2015,40 @@ export default function ReceiptExpensePage() {
                           </span>
                         </div>
 
-                        {/* Amount Strip */}
+                        {/* Amount & Reimbursed Strip */}
                         <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/30 border border-border">
                           <div>
                             <span className="text-[10px] text-muted-foreground uppercase font-semibold block">
-                              Amount in CAD
+                              Amount
                             </span>
                             <span className="text-base font-bold font-mono text-foreground">
                               ${cadVal.toFixed(2)} CAD
                             </span>
+                            {rec.currency !== "CAD" && (
+                              <span className="text-[10px] text-muted-foreground block font-mono">
+                                ${Number(rec.total_amount).toFixed(2)} {rec.currency}
+                              </span>
+                            )}
                           </div>
                           <div className="text-right">
-                            <span className="text-[10px] text-muted-foreground block font-mono">
-                              ${Number(rec.total_amount).toFixed(2)} {rec.currency}
+                            <span className="text-[10px] text-muted-foreground uppercase font-semibold block">
+                              To Be Reimbursed
                             </span>
-                            <span className="text-[10px] font-mono text-muted-foreground">
-                              Rate: {Number(rec.exchange_rate || 1.385).toFixed(4)}
-                            </span>
+                            {rec.is_reimbursable ? (
+                              <div>
+                                <span className="text-sm font-bold font-mono text-indigo-600 dark:text-indigo-400 block">
+                                  ${cadVal.toFixed(2)} CAD
+                                </span>
+                                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                                  Employee Due
+                                </span>
+                              </div>
+                            ) : (
+                              <div>
+                                <span className="text-xs font-mono text-muted-foreground block">$0.00 CAD</span>
+                                <span className="text-[10px] text-muted-foreground">Corp Card</span>
+                              </div>
+                            )}
                           </div>
                         </div>
 

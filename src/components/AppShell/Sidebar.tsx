@@ -7,6 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 import { useAuth } from "@/lib/AuthContext";
 import { useQuery } from "@tanstack/react-query";
 import { apiClient } from "@/services/apiClient";
+import { travelService } from "@/services/travelService";
 import type { User } from "@/types/auth";
 
 interface SidebarProps {
@@ -61,6 +62,15 @@ export default function Sidebar({ isOpen, onToggle, onClose }: SidebarProps) {
           u.assigned_roles.length === 0 ||
           u.assigned_roles.every((role) => role.code === "PENDING_USER"))
     ).length || 0;
+
+  // Pending approvals count for Approvals badge in MAIN section
+  const { data: receiptsData } = useQuery({
+    queryKey: ["travelReceipts", "sidebarPendingCount"],
+    queryFn: () => travelService.getReceipts({ status: "pending_approval", isAdminOverride: true }),
+    staleTime: 30000,
+  });
+
+  const pendingApprovalsCount = receiptsData?.stats?.total_receipts ?? receiptsData?.receipts?.length ?? 0;
 
   const toggleExpand = (label: string) => {
     setExpandedItems((prev) => ({ ...prev, [label]: !prev[label] }));
@@ -283,6 +293,9 @@ export default function Sidebar({ isOpen, onToggle, onClose }: SidebarProps) {
                         >
                           <div className="flex items-center justify-center flex-shrink-0 relative">
                             <Icon size={16} />
+                            {item.label === "Approvals" && pendingApprovalsCount > 0 && !isOpen && (
+                              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-sidebar animate-pulse" />
+                            )}
                           </div>
                           <div
                             className={`flex items-center justify-between min-w-0 ${
@@ -298,6 +311,11 @@ export default function Sidebar({ isOpen, onToggle, onClose }: SidebarProps) {
                             >
                               {item.label}
                             </span>
+                            {item.label === "Approvals" && pendingApprovalsCount > 0 && isOpen && (
+                              <div className="flex-shrink-0 bg-amber-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full ml-1.5 shadow-2xs">
+                                {pendingApprovalsCount}
+                              </div>
+                            )}
                           </div>
                         </Link>
                       </TooltipTrigger>

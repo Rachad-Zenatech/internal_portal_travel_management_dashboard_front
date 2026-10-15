@@ -3,6 +3,7 @@ import {
   ShieldCheck,
   FileClock,
   Plane,
+  ClipboardCheck,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -30,6 +31,12 @@ export const navigation: NavigationItem[] = [
     navigationCode: "DASHBOARD",
   },
   {
+    label: "Approvals",
+    path: "/travel/approvals",
+    icon: ClipboardCheck,
+    section: "MAIN",
+  },
+  {
     label: "Travel & Expeditions",
     icon: Plane,
     section: "TRAVEL OPERATIONS",
@@ -44,7 +51,7 @@ export const navigation: NavigationItem[] = [
       { label: "Drone Cargo & Coverage", path: "/travel/drone-cargo" },
       { label: "Vehicle & Seat Library", path: "/travel/vehicles" },
       { label: "Trip Calendar & Meeting Spots", path: "/travel/calendar" },
-      { label: "Receipts & Expense OCR", path: "/travel/receipts" },
+      { label: "Expenses", path: "/travel/receipts" },
     ],
   },
   {
