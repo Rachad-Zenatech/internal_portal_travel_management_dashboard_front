@@ -39,6 +39,8 @@ export interface FlightSearchResultItem {
   option_id: string;
   trip_type: "one_way" | "round_trip";
   price: number;
+  departure_price?: number;
+  return_price?: number;
   currency: string;
   airline_name: string;
   flight_numbers: string;

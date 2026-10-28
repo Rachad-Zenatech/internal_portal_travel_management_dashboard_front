@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import fuzzysort from "fuzzysort";
-import { Car, Plus, Loader2 } from "lucide-react";
+import { Car, Plus, Loader2, X } from "lucide-react";
 
 export interface AutocompleteInputOption {
   id: string | number;
@@ -150,28 +150,54 @@ export function AutocompleteInput({
 
   return (
     <div ref={containerRef} className="relative w-full">
-      <Input
-        ref={inputRef}
-        type="text"
-        value={value}
-        onChange={(e) => {
-          onChange(e.target.value);
-          setIsOpen(true);
-          setHighlightedIndex(-1);
-        }}
-        onFocus={() => {
-          setIsOpen(true);
-        }}
-        onKeyDown={handleKeyDown}
-        placeholder={placeholder}
-        disabled={disabled}
-        className={className}
-        autoFocus={autoFocus}
-        autoComplete="off"
-      />
+      <div className="relative w-full">
+        <Input
+          ref={inputRef}
+          type="text"
+          value={value}
+          onChange={(e) => {
+            onChange(e.target.value);
+            setIsOpen(true);
+            setHighlightedIndex(-1);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+          }}
+          onClick={() => {
+            if (!isOpen) setIsOpen(true);
+          }}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={cn(className, value && !disabled ? "pr-8" : "")}
+          autoFocus={autoFocus}
+          autoComplete="off"
+        />
+
+        {value && !disabled && (
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={(e) => {
+              e.stopPropagation();
+              onChange("");
+              if (onSelectOption) {
+                const allOpt = options.find((o) => o.id === "all");
+                if (allOpt) onSelectOption(allOpt);
+              }
+              setIsOpen(true);
+              inputRef.current?.focus();
+            }}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-muted/80 transition-colors"
+            title="Clear"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
 
       {showDropdown && (
-        <div className="absolute left-0 top-full z-50 mt-1 max-h-64 w-full overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-xl">
+        <div className="absolute left-0 top-full z-[100] mt-1 max-h-64 w-full min-w-full overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-2xl p-1 ring-1 ring-border">
           {suggestions.length > 0 ? (
             <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
               Suggestions ({suggestions.length})

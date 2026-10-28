@@ -5,16 +5,23 @@ import type {
   TravelBudget,
   BudgetLineItem,
   TravelerStipend,
+  EventStipendsOverview,
   SpecialCoverage,
   DroneCombatGear,
   SpecialLuggageManifest,
   TravelDashboardSummary,
+  EventCostsSummary,
+  TravelVehicle,
+  EventTripGroup,
 } from "@/types/travel";
 
 export const travelService = {
   // Summary
   getDashboardSummary: () =>
     apiClient.get<TravelDashboardSummary>("/api/travel/dashboard/summary"),
+
+  // All Trips & Grouped Bookings
+  getAllTrips: () => apiClient.get<EventTripGroup[]>("/api/travel/all-trips"),
 
   // Events & Attendees ("Who is going")
   getEvents: () => apiClient.get<TravelEvent[]>("/api/travel/events"),
@@ -26,7 +33,11 @@ export const travelService = {
       drone_gear: DroneCombatGear[];
       special_luggage: SpecialLuggageManifest[];
       special_coverages: SpecialCoverage[];
+      costs?: EventCostsSummary;
+      vehicles?: TravelVehicle[];
     }>(`/api/travel/events/${id}`),
+  getEventCosts: (id: string) =>
+    apiClient.get<EventCostsSummary>(`/api/travel/events/${id}/costs`),
   createEvent: (data: Partial<TravelEvent> & { attendees?: Partial<EventAttendee>[] }) =>
     apiClient.post<TravelEvent>("/api/travel/events", data),
   updateEvent: (id: string, data: Partial<TravelEvent>) =>
@@ -62,10 +73,46 @@ export const travelService = {
     apiClient.post<TravelBudget>("/api/travel/budgets", data),
   addBudgetLineItem: (budgetId: string, data: Partial<BudgetLineItem>) =>
     apiClient.post<BudgetLineItem>(`/api/travel/budgets/${budgetId}/line-items`, data),
+  deleteBudgetLineItem: (itemId: string, budgetId?: string) =>
+    budgetId
+      ? apiClient.delete(`/api/travel/budgets/${budgetId}/line-items/${itemId}`)
+      : apiClient.delete(`/api/travel/budget-line-items/${itemId}`),
   deleteBudget: (id: string) => apiClient.delete(`/api/travel/budgets/${id}`),
 
   // Stipends ("User stiphen for who")
   getStipends: () => apiClient.get<TravelerStipend[]>("/api/travel/stipends"),
+  getStipendsEventsOverview: (scope: string = "upcoming_inprogress") =>
+    apiClient.get<EventStipendsOverview[]>(`/api/travel/stipends/events-overview?scope=${scope}`),
+  saveGlobalStipendSetup: (eventId: string, data: {
+    daily_rate: number;
+    total_days: number;
+    currency?: string;
+    destination_tier?: string;
+    payment_method?: string;
+    notes?: string;
+    apply_to_custom_overrides?: boolean;
+  }) => apiClient.post(`/api/travel/stipends/events/${eventId}/global-setup`, data),
+  saveCustomStipendChange: (data: {
+    event_id: string;
+    attendee_id?: string;
+    recipient_name: string;
+    recipient_email: string;
+    daily_rate: number;
+    total_days: number;
+    total_amount: number;
+    currency?: string;
+    destination_tier?: string;
+    payment_method?: string;
+    notes?: string;
+  }) => apiClient.post<TravelerStipend>("/api/travel/stipends/custom", data),
+  approveEventStipends: (eventId: string, data?: { approved_by?: string }) =>
+    apiClient.post(`/api/travel/stipends/events/${eventId}/approve`, data || {}),
+  rejectEventStipends: (eventId: string, data?: { reason?: string }) =>
+    apiClient.post(`/api/travel/stipends/events/${eventId}/reject`, data || {}),
+  approveSingleStipend: (stipendId: string, data?: { approved_by?: string }) =>
+    apiClient.post<TravelerStipend>(`/api/travel/stipends/${stipendId}/approve`, data || {}),
+  rejectSingleStipend: (stipendId: string, data?: { reason?: string }) =>
+    apiClient.post<TravelerStipend>(`/api/travel/stipends/${stipendId}/reject`, data || {}),
   createStipend: (data: Partial<TravelerStipend>) =>
     apiClient.post<TravelerStipend>("/api/travel/stipends", data),
   disburseStipend: (id: string) =>
@@ -137,6 +184,7 @@ export const travelService = {
     start_date?: string;
     end_date?: string;
     budget_cap?: number;
+    model?: string;
   }) => apiClient.post<import("@/types/travel").AiChatResponse>("/api/travel/ai-planner/chat", payload),
 
   sendAiChatStream: async (
@@ -149,6 +197,7 @@ export const travelService = {
       start_date?: string;
       end_date?: string;
       budget_cap?: number;
+      model?: string;
     },
     callbacks: {
       onStatus?: (statusText: string) => void;
@@ -301,6 +350,8 @@ export const travelService = {
     }>(`/api/travel/vehicles/${vehicleId}/check-in`, payload),
   deleteVehicle: (vehicleId: string) =>
     apiClient.delete<{ message: string }>(`/api/travel/vehicles/${vehicleId}`),
+  scrapeVehicleSpecs: (payload: { url: string; vehicle_id?: string; vendor?: string; raw_html?: string }) =>
+    apiClient.post<import("@/types/travel").VehicleScrapeResponse>("/api/travel/vehicles/scrape-specs", payload),
 
   // Trip Calendar & Meeting Spots (Today & Tomorrow Schedule)
   getCalendarSchedule: (params?: { eventId?: string; userEmail?: string; isAdminOverride?: boolean }) => {
@@ -361,4 +412,95 @@ export const travelService = {
     apiClient.delete<{ message: string }>(`/api/travel/receipts/${receiptId}`),
   getCurrencies: () =>
     apiClient.get<import("@/types/travel").CurrenciesApiResponse>("/api/travel/receipts/currencies"),
+
+  // Navan Travel & Expense Integration
+  getNavanStatus: () =>
+    apiClient.get<import("@/types/travel").NavanConnectionStatus>("/api/travel/navan/status"),
+  syncNavan: (params?: {
+    date_filter_type?: "created" | "startDate" | string;
+    from_date?: number;
+    to_date?: number;
+    trip_uuid?: string;
+  }) =>
+    apiClient.post<{
+      status: string;
+      synced_events?: number;
+      synced_attendees?: number;
+      synced_bookings?: number;
+      synced_expenses?: number;
+      timestamp: string;
+    }>("/api/travel/navan/sync", params),
+  getNavanOverview: () =>
+    apiClient.get<import("@/types/travel").NavanOverview>("/api/travel/navan/overview"),
+  getNavanBookings: (params?: {
+    booking_type?: string;
+    booking_status?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.booking_type && params.booking_type !== "ALL") q.append("booking_type", params.booking_type);
+    if (params?.booking_status && params.booking_status !== "ALL") q.append("booking_status", params.booking_status);
+    if (params?.search) q.append("search", params.search);
+    if (params?.limit) q.append("limit", String(params.limit));
+    if (params?.offset) q.append("offset", String(params.offset));
+    const qs = q.toString();
+    return apiClient.get<{ total: number; limit: number; offset: number; bookings: import("@/types/travel").NavanBooking[] }>(
+      qs ? `/api/travel/navan/bookings?${qs}` : "/api/travel/navan/bookings"
+    );
+  },
+  getNavanExpenses: (params?: {
+    category?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const q = new URLSearchParams();
+    if (params?.category && params.category !== "ALL") q.append("category", params.category);
+    if (params?.search) q.append("search", params.search);
+    if (params?.limit) q.append("limit", String(params.limit));
+    if (params?.offset) q.append("offset", String(params.offset));
+    const qs = q.toString();
+    return apiClient.get<{ total: number; limit: number; offset: number; expenses: import("@/types/travel").NavanExpense[] }>(
+      qs ? `/api/travel/navan/expenses?${qs}` : "/api/travel/navan/expenses"
+    );
+  },
+  getNavanEvents: (status?: string) => {
+    const q = new URLSearchParams();
+    if (status && status !== "ALL") q.append("event_status", status);
+    const qs = q.toString();
+    return apiClient.get<{ total: number; events: import("@/types/travel").NavanSyncedEvent[] }>(
+      qs ? `/api/travel/navan/events?${qs}` : "/api/travel/navan/events"
+    );
+  },
+  getNavanGroupEvents: (daysBack: number = 30) =>
+    apiClient.get<import("@/types/travel").NavanGroupEventsMap>(
+      `/api/navan/group-events?days_back=${daysBack}`
+    ),
+  getUserInfo: (email?: string) =>
+    apiClient.get<{
+      id: string;
+      email: string;
+      firstName: string;
+      lastName: string;
+      businessCapabilities: {
+        supportedSearchTypes: Record<string, string> | string[];
+        canBookForOthers?: boolean;
+        guestBookingEnabled?: boolean;
+      };
+    }>(email ? `/api/uaa/userinfo?email=${encodeURIComponent(email)}` : "/api/uaa/userinfo"),
+  getNavanEventParticipants: (eventId: string, page: number = 0, size: number = 20) =>
+    apiClient.get<{
+      content: any[];
+      totalElements: number;
+      totalPages: number;
+      getTravelEventInvitationsResponseDto?: {
+        invitations: {
+          content: any[];
+          totalElements: number;
+          totalPages: number;
+        };
+      };
+    }>(`/api/v2/user/travel-events/${eventId}/invitations/filter-participants?page=${page}&size=${size}`),
 };

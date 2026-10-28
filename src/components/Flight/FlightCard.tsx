@@ -344,6 +344,13 @@ export function FlightCard({
               <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">
                 {flight.trip_type === "round_trip" ? "Round trip total" : "One-way total"}
               </p>
+              {flight.trip_type === "round_trip" && flight.departure_price && flight.return_price && (
+                <div className="text-[10px] text-muted-foreground/80 mt-0.5 font-medium lg:text-right">
+                  <span>Outbound ${flight.departure_price.toFixed(2)}</span>
+                  <span className="mx-1">+</span>
+                  <span>Return ${flight.return_price.toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex items-center gap-1.5 mt-1 lg:justify-end flex-wrap">
                 {flight.flight_category ? (
                   <Badge

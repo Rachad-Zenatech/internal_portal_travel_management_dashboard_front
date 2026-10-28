@@ -68,7 +68,13 @@ export default function Dashboard() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-            <Button asChild size="sm" className="gap-2 text-xs">
+            <Button asChild size="sm" className="gap-2 text-xs bg-blue-600 hover:bg-blue-700 text-white">
+              <Link to="/travel/navan">
+                <Plane className="w-3.5 h-3.5" />
+                <span>Navan Live Hub</span>
+              </Link>
+            </Button>
+            <Button asChild variant="outline" size="sm" className="gap-2 text-xs">
               <Link to="/travel/events">
                 <Calendar className="w-3.5 h-3.5" />
                 <span>View Expeditions</span>
@@ -94,11 +100,11 @@ export default function Dashboard() {
               <Calendar className="w-4 h-4 text-primary" />
             </CardDescription>
             <CardTitle className="text-2xl font-bold">
-              {summary?.events.total ?? 0}
+              {summary?.events?.total ?? 0}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground pt-0">
-            {summary?.events.attendees ?? 0} pilots & crew rostered
+            {summary?.events?.attendees ?? 0} pilots & crew rostered
           </CardContent>
         </Card>
 
@@ -110,11 +116,11 @@ export default function Dashboard() {
               <DollarSign className="w-4 h-4 text-emerald-500" />
             </CardDescription>
             <CardTitle className="text-2xl font-bold text-foreground">
-              ${(summary?.budget.allocated ?? 0).toLocaleString()}
+              ${(summary?.budget?.allocated ?? 0).toLocaleString()}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground pt-0">
-            ${(summary?.budget.spent ?? 0).toLocaleString()} spent ({budgetUtilization.toFixed(0)}%)
+            ${(summary?.budget?.spent ?? 0).toLocaleString()} spent ({budgetUtilization.toFixed(0)}%)
           </CardContent>
         </Card>
 
@@ -126,11 +132,11 @@ export default function Dashboard() {
               <Wallet className="w-4 h-4 text-purple-500" />
             </CardDescription>
             <CardTitle className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-              ${(summary?.stipends.total_amount ?? 0).toLocaleString()}
+              ${(summary?.stipends?.total_amount ?? 0).toLocaleString()}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground pt-0">
-            {summary?.stipends.disbursed_count ?? 0} / {summary?.stipends.total_recipients ?? 0} disbursed
+            {summary?.stipends?.disbursed_count ?? 0} / {summary?.stipends?.total_recipients ?? 0} disbursed
           </CardContent>
         </Card>
 
@@ -142,11 +148,11 @@ export default function Dashboard() {
               <Crosshair className="w-4 h-4 text-rose-500" />
             </CardDescription>
             <CardTitle className="text-2xl font-bold text-rose-600 dark:text-rose-400">
-              {summary?.drone_combat_gear.combat_ready ?? 0}
+              {summary?.drone_combat_gear?.combat_ready ?? 0}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground pt-0">
-            {summary?.drone_combat_gear.lipo_packs ?? 0} certified LiPo flight packs
+            {summary?.drone_combat_gear?.lipo_packs ?? 0} certified LiPo flight packs
           </CardContent>
         </Card>
 
@@ -158,11 +164,11 @@ export default function Dashboard() {
               <Package className="w-4 h-4 text-amber-500" />
             </CardDescription>
             <CardTitle className="text-2xl font-bold text-foreground">
-              {summary?.special_luggage.cases_count ?? 0} Cases
+              {summary?.special_luggage?.cases_count ?? 0} Cases
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground pt-0">
-            {(summary?.special_luggage.total_weight_kg ?? 0).toFixed(1)} kg gross airfreight
+            {(summary?.special_luggage?.total_weight_kg ?? 0).toFixed(1)} kg gross airfreight
           </CardContent>
         </Card>
 
@@ -174,11 +180,11 @@ export default function Dashboard() {
               <Shield className="w-4 h-4 text-blue-500" />
             </CardDescription>
             <CardTitle className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-              ${(summary?.special_coverage.total_coverage_limit ?? 0).toLocaleString()}
+              ${(summary?.special_coverage?.total_coverage_limit ?? 0).toLocaleString()}
             </CardTitle>
           </CardHeader>
           <CardContent className="text-xs text-muted-foreground pt-0">
-            {summary?.special_coverage.active_policies ?? 0} active policies
+            {summary?.special_coverage?.active_policies ?? 0} active policies
           </CardContent>
         </Card>
       </div>
@@ -274,7 +280,7 @@ export default function Dashboard() {
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            {!summary?.events.recent || summary.events.recent.length === 0 ? (
+            {!summary?.events?.recent || summary.events.recent.length === 0 ? (
               <div className="p-8 text-center text-sm text-muted-foreground">
                 No active expeditions scheduled.
               </div>
