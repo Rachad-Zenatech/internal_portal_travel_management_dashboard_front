@@ -62,6 +62,7 @@ import {
 } from "@/components/ui/popover";
 import { toast } from "sonner";
 import { runTesseractOcr, type OcrProgressUpdate } from "@/lib/tesseractOcr";
+import { AutocompleteCombobox, type AutocompleteOption } from "@/components/ui/autocomplete-combobox";
 
 // Standard Zoho Expense Categories
 const EXPENSE_CATEGORIES = [
@@ -307,13 +308,15 @@ export default function ReceiptExpensePage() {
       }),
   });
 
-  const receiptsList = receiptsData?.receipts || [];
-  const stats = receiptsData?.stats || {
-    total_receipts: 0,
-    total_amount: 0,
-    pending_amount: 0,
-    approved_amount: 0,
-    reimbursed_amount: 0,
+  const receiptsList: TravelReceipt[] = Array.isArray(receiptsData)
+    ? receiptsData
+    : (receiptsData?.receipts || []);
+  const stats = (!Array.isArray(receiptsData) && receiptsData?.stats) || {
+    total_receipts: receiptsList.length,
+    total_amount: receiptsList.reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0),
+    pending_amount: receiptsList.filter((r) => r.status === "pending_approval").reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0),
+    approved_amount: receiptsList.filter((r) => r.status === "approved").reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0),
+    reimbursed_amount: receiptsList.filter((r) => r.status === "reimbursed").reduce((acc, r) => acc + (Number(r.total_amount) || 0), 0),
   };
 
   // Query total receipts count for top tab badge
@@ -328,8 +331,8 @@ export default function ReceiptExpensePage() {
   });
 
   const allCount =
-    allReceiptsCountData?.stats?.total_receipts ??
-    allReceiptsCountData?.receipts?.length ??
+    (!Array.isArray(allReceiptsCountData) && allReceiptsCountData?.stats?.total_receipts) ??
+    (Array.isArray(allReceiptsCountData) ? allReceiptsCountData.length : allReceiptsCountData?.receipts?.length) ??
     (perspectiveMode === "leadership" ? receiptsList.length : 0);
 
   const myCount = useMemo(() => {
@@ -337,16 +340,33 @@ export default function ReceiptExpensePage() {
       return receiptsList.length;
     }
     const currentEmail = (user?.email || "alex.rivera@zenatech.com").toLowerCase();
-    const sourceList = allReceiptsCountData?.receipts || receiptsList;
+    const sourceList = (Array.isArray(allReceiptsCountData) ? allReceiptsCountData : allReceiptsCountData?.receipts) || receiptsList;
     return sourceList.filter((r) => (r.user_email || "").toLowerCase() === currentEmail).length;
-  }, [perspectiveMode, receiptsList, allReceiptsCountData?.receipts, user?.email]);
+  }, [perspectiveMode, receiptsList, allReceiptsCountData, user?.email]);
 
   // Auto-set event ID
   useEffect(() => {
     if (eventsList.length > 0 && !formEventId) {
-      setFormEventId(eventsList[0].id);
+      const firstEv = eventsList[0] as any;
+      setFormEventId(firstEv.id || firstEv.trip_uuid || firstEv.event_name || "");
     }
   }, [eventsList, formEventId]);
+
+  // Combobox options for mapping travel events
+  const eventComboboxOptions: AutocompleteOption[] = useMemo(() => [
+    {
+      id: "",
+      name: "General Corporate Travel (No Event)",
+      sublabel: "Standard company business overhead",
+      badge: "General",
+    },
+    ...eventsList.map((ev: any) => ({
+      id: ev.id || ev.trip_uuid || ev.event_name || "",
+      name: ev.title || ev.event_name || "Corporate Travel Event",
+      sublabel: `${ev.location || "TBD"} • ${ev.start_date || ""} to ${ev.end_date || ""}`,
+      badge: ev.status ? String(ev.status).toUpperCase() : undefined,
+    })),
+  ], [eventsList]);
 
   // Currencies catalog powered by country-currencies python library
   const { data: currenciesData } = useQuery({
@@ -1509,119 +1529,111 @@ export default function ReceiptExpensePage() {
                   </div>
 
                   {/* SECTION 2: AMOUNT & CURRENCY (Amount in CAD & Exchange Rate) */}
+                  {/* SECTION 2: AMOUNT, TAX & CURRENCY BREAKDOWN */}
                   <div className="space-y-4">
-                    <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 border-b border-border/50 pb-1.5">
-                      <DollarSign className="w-3.5 h-3.5 text-primary" />
-                      <span>2. Spend Amount & Currency Conversion</span>
+                    <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center justify-between border-b border-border/50 pb-1.5">
+                      <span className="flex items-center gap-1.5">
+                        <DollarSign className="w-3.5 h-3.5 text-primary" />
+                        <span>2. Financial Breakdown (Subtotal, Tax & Total Spend)</span>
+                      </span>
+                      <span className="text-[11px] font-mono text-muted-foreground font-normal">
+                        Pre-tax + Tax = After-tax total
+                      </span>
                     </div>
 
+                    {/* Currency & Base Conversion Row */}
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 rounded-xl bg-muted/20 border border-border">
-                      {/* Spend Amount & Original Currency Auto-Complete */}
+                      {/* Currency Auto-Complete Combobox */}
                       <div>
                         <Label className="text-xs font-semibold text-foreground block mb-1">
-                          Spend Amount <span className="text-destructive">*</span>
+                          Billing Currency
                         </Label>
-                        <div className="flex gap-2">
-                          <div className="relative flex-1">
-                            <DollarSign className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
-                            <Input
-                              type="number"
-                              step="0.01"
-                              value={formSpendAmount || ""}
-                              onChange={(e) => setFormSpendAmount(parseFloat(e.target.value) || 0)}
-                              placeholder="0.00"
-                              className="h-9 pl-7 text-xs rounded-lg font-mono font-medium"
-                            />
-                          </div>
-
-                          {/* Currency Auto-Complete Combobox */}
-                          <Popover open={isCurrencyOpen} onOpenChange={setIsCurrencyOpen}>
-                            <PopoverTrigger asChild>
-                              <Button
-                                type="button"
-                                variant="outline"
-                                role="combobox"
-                                aria-expanded={isCurrencyOpen}
-                                className="h-9 min-w-[95px] px-2.5 rounded-lg border-input bg-background text-xs font-bold font-mono justify-between gap-1 hover:bg-muted/30"
-                              >
-                                <span className="truncate">{formCurrency}</span>
-                                <ChevronsUpDown className="w-3 h-3 text-muted-foreground shrink-0 opacity-60" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[330px] p-2 bg-popover rounded-xl border border-border shadow-lg" align="end">
-                              <div className="flex items-center border-b border-border px-2 pb-2 gap-1.5">
-                                <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                                <Input
-                                  placeholder="Search currency code, name, or country..."
-                                  value={currencySearch}
-                                  onChange={(e) => setCurrencySearch(e.target.value)}
-                                  className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-1 font-sans"
-                                  autoFocus
-                                />
-                                {currencySearch && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setCurrencySearch("")}
-                                    className="text-muted-foreground hover:text-foreground"
-                                  >
-                                    <X className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </div>
-                              <div className="max-h-60 overflow-y-auto pt-1 space-y-0.5">
-                                {filteredCurrencies.length === 0 ? (
-                                  <div className="p-3 text-center text-xs text-muted-foreground">
-                                    No currencies matching "{currencySearch}"
-                                  </div>
-                                ) : (
-                                  filteredCurrencies.map((c) => {
-                                    const isSelected = formCurrency === c.code;
-                                    return (
-                                      <button
-                                        key={c.code}
-                                        type="button"
-                                        onClick={() => {
-                                          handleCurrencySelect(c);
-                                          setIsCurrencyOpen(false);
-                                          setCurrencySearch("");
-                                        }}
-                                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors text-left ${
-                                          isSelected ? "bg-primary/10 text-primary font-semibold" : "hover:bg-muted/50 text-foreground"
-                                        }`}
-                                      >
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          <span className="font-mono font-bold text-xs w-10 shrink-0">{c.code}</span>
-                                          <span className="text-[11px] text-muted-foreground w-6 text-center font-mono shrink-0">{c.symbol}</span>
-                                          <div className="truncate">
-                                            <span className="truncate font-medium">{c.name}</span>
-                                            {c.countries && c.countries.length > 0 && (
-                                              <span className="text-[10px] text-muted-foreground ml-1 font-mono">
-                                                ({c.countries.slice(0, 3).join(", ")}{c.countries.length > 3 ? "..." : ""})
-                                              </span>
-                                            )}
-                                          </div>
+                        <Popover open={isCurrencyOpen} onOpenChange={setIsCurrencyOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={isCurrencyOpen}
+                              className="h-9 w-full px-2.5 rounded-lg border-input bg-background text-xs font-bold font-mono justify-between gap-1 hover:bg-muted/30"
+                            >
+                              <span className="truncate">{formCurrency}</span>
+                              <ChevronsUpDown className="w-3 h-3 text-muted-foreground shrink-0 opacity-60" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-[330px] p-2 bg-popover rounded-xl border border-border shadow-lg" align="start">
+                            <div className="flex items-center border-b border-border px-2 pb-2 gap-1.5">
+                              <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                              <Input
+                                placeholder="Search currency code, name, or country..."
+                                value={currencySearch}
+                                onChange={(e) => setCurrencySearch(e.target.value)}
+                                className="h-7 text-xs border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-1 font-sans"
+                                autoFocus
+                              />
+                              {currencySearch && (
+                                <button
+                                  type="button"
+                                  onClick={() => setCurrencySearch("")}
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                            <div className="max-h-60 overflow-y-auto pt-1 space-y-0.5">
+                              {filteredCurrencies.length === 0 ? (
+                                <div className="p-3 text-center text-xs text-muted-foreground">
+                                  No currencies matching "{currencySearch}"
+                                </div>
+                              ) : (
+                                filteredCurrencies.map((c) => {
+                                  const isSelected = formCurrency === c.code;
+                                  return (
+                                    <button
+                                      key={c.code}
+                                      type="button"
+                                      onClick={() => {
+                                        handleCurrencySelect(c);
+                                        setIsCurrencyOpen(false);
+                                        setCurrencySearch("");
+                                      }}
+                                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors text-left ${
+                                        isSelected ? "bg-primary/10 text-primary font-semibold" : "hover:bg-muted/50 text-foreground"
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <span className="font-mono font-bold text-xs w-10 shrink-0">{c.code}</span>
+                                        <span className="text-[11px] text-muted-foreground w-6 text-center font-mono shrink-0">{c.symbol}</span>
+                                        <div className="truncate">
+                                          <span className="truncate font-medium">{c.name}</span>
+                                          {c.countries && c.countries.length > 0 && (
+                                            <span className="text-[10px] text-muted-foreground ml-1 font-mono">
+                                              ({c.countries.slice(0, 3).join(", ")}{c.countries.length > 3 ? "..." : ""})
+                                            </span>
+                                          )}
                                         </div>
-                                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                                          <span className="text-[10px] font-mono text-muted-foreground">
-                                            ~{c.default_exchange_rate.toFixed(3)}
-                                          </span>
-                                          {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
-                                        </div>
-                                      </button>
-                                    );
-                                  })
-                                )}
-                              </div>
-                              <div className="pt-2 border-t border-border mt-1 px-1 flex items-center justify-between text-[10px] text-muted-foreground">
-                                <span>Powered by countries-currencies</span>
-                                <span>{currenciesCatalog.length} currencies</span>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
+                                      </div>
+                                      <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                                        <span className="text-[10px] font-mono text-muted-foreground">
+                                          ~{c.default_exchange_rate.toFixed(3)}
+                                        </span>
+                                        {isSelected && <Check className="w-3.5 h-3.5 text-primary" />}
+                                      </div>
+                                    </button>
+                                  );
+                                })
+                              )}
+                            </div>
+                            <div className="pt-2 border-t border-border mt-1 px-1 flex items-center justify-between text-[10px] text-muted-foreground">
+                              <span>Powered by countries-currencies</span>
+                              <span>{currenciesCatalog.length} currencies</span>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       </div>
 
-                      {/* Exchange Rate (Quick Selection Removed, Auto-Complete & Manual Customization) */}
+                      {/* Exchange Rate */}
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <Label className="text-xs font-semibold text-foreground">
@@ -1638,17 +1650,14 @@ export default function ReceiptExpensePage() {
                           onChange={(e) => setFormExchangeRate(parseFloat(e.target.value) || 1.0)}
                           className="h-9 text-xs rounded-lg font-mono font-medium"
                         />
-                        <span className="text-[10px] text-muted-foreground block mt-1">
-                          Auto-populated from {formCurrency} rate. Editable for custom conversions.
-                        </span>
                       </div>
 
                       {/* Amount in (CAD) Highlight */}
-                      <div className="p-3 rounded-lg bg-card border border-primary/30 flex flex-col justify-center">
+                      <div className="p-2.5 rounded-lg bg-card border border-primary/30 flex flex-col justify-center">
                         <span className="text-[11px] font-semibold text-primary uppercase tracking-wider block mb-0.5">
                           Amount in (CAD)
                         </span>
-                        <div className="text-xl font-bold font-mono text-foreground">
+                        <div className="text-lg font-bold font-mono text-foreground">
                           ${amountCad.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                         <span className="text-[10px] text-muted-foreground">
@@ -1657,148 +1666,186 @@ export default function ReceiptExpensePage() {
                       </div>
                     </div>
 
-                    {/* Real-time Calculation & Discount Verification Banner */}
-                    {(formDiscount > 0 || formSubtotal !== null || formCalculationVerified) && (
-                      <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-950 dark:text-emerald-200 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
-                            <ShieldCheck className="w-4 h-4" />
-                            <span>Real-time Verified Amount & Discount Calculation</span>
-                          </div>
-                          <Badge variant="outline" className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 font-mono">
-                            Verified Total
-                          </Badge>
+                    {/* Pre-tax Subtotal, Tax, Tip & Discount Inputs */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div>
+                        <Label className="text-xs font-semibold text-foreground block mb-1">
+                          Pre-Tax Subtotal
+                        </Label>
+                        <div className="relative">
+                          <DollarSign className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={formSubtotal ?? ""}
+                            onChange={(e) => {
+                              const val = e.target.value === "" ? null : parseFloat(e.target.value) || 0;
+                              setFormSubtotal(val);
+                              if (val !== null) {
+                                const net = Math.max(val - formDiscount, 0);
+                                setFormNetSubtotal(net);
+                                setFormSpendAmount(Number((net + formTax + formTip).toFixed(2)));
+                              }
+                            }}
+                            placeholder="0.00"
+                            className="h-9 pl-7 text-xs rounded-lg font-mono"
+                          />
                         </div>
+                        <span className="text-[10px] text-muted-foreground block mt-1">Pre-tax goods & services</span>
+                      </div>
 
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs pt-1">
-                          <div className="p-2 rounded-lg bg-background/70 border border-border/50">
-                            <span className="text-[10px] text-muted-foreground block">Gross Subtotal</span>
-                            <span className="font-mono font-bold text-foreground">
-                              ${(formSubtotal ?? (formSpendAmount + formDiscount - formTax - formTip)).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="p-2 rounded-lg bg-background/70 border border-emerald-500/40">
-                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold block">Discount Deducted</span>
-                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                              -${formDiscount.toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="p-2 rounded-lg bg-background/70 border border-border/50">
-                            <span className="text-[10px] text-muted-foreground block">Net Subtotal</span>
-                            <span className="font-mono font-bold text-foreground">
-                              ${(formNetSubtotal ?? (formSpendAmount - formTax - formTip)).toFixed(2)}
-                            </span>
-                          </div>
-                          <div className="p-2 rounded-lg bg-background/70 border border-primary/40">
-                            <span className="text-[10px] text-primary font-semibold block">Final Verified Total</span>
-                            <span className="font-mono font-bold text-primary">
-                              ${formSpendAmount.toFixed(2)} {formCurrency}
-                            </span>
-                          </div>
+                      <div>
+                        <Label className="text-xs font-semibold text-foreground block mb-1">
+                          Tax Amount (GST/HST/VAT)
+                        </Label>
+                        <div className="relative">
+                          <DollarSign className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={formTax || ""}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setFormTax(val);
+                              const sub = formSubtotal ?? 0;
+                              const disc = formDiscount ?? 0;
+                              const net = Math.max(sub - disc, 0);
+                              setFormSpendAmount(Number((net + val + formTip).toFixed(2)));
+                            }}
+                            placeholder="0.00"
+                            className="h-9 pl-7 text-xs rounded-lg font-mono"
+                          />
                         </div>
+                        <span className="text-[10px] text-muted-foreground block mt-1">Sales tax / VAT amount</span>
+                      </div>
 
-                        {formDiscountDetails && (
-                          <p className="text-[11px] text-muted-foreground font-mono italic pt-0.5">
-                            {formDiscountDetails}
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Gross Subtotal & Discount Inputs */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-xs font-semibold text-foreground block mb-1">
-                          Gross Subtotal (Pre-Discount)
-                        </Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={formSubtotal ?? ""}
-                          onChange={(e) => {
-                            const val = e.target.value === "" ? null : parseFloat(e.target.value) || 0;
-                            setFormSubtotal(val);
-                            if (val !== null && val > 0) {
-                              const net = Math.max(val - formDiscount, 0);
-                              setFormNetSubtotal(net);
-                              setFormSpendAmount(Number((net + formTax + formTip).toFixed(2)));
-                            }
-                          }}
-                          placeholder="e.g. 76.50"
-                          className="h-9 text-xs rounded-lg font-mono"
-                        />
-                      </div>
-                      <div>
-                        <Label className="text-xs font-semibold text-foreground block mb-1">
-                          Discount Total / Promos / Comps
-                        </Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={formDiscount || ""}
-                          onChange={(e) => {
-                            const disc = parseFloat(e.target.value) || 0;
-                            setFormDiscount(disc);
-                            if (formSubtotal !== null && formSubtotal > 0) {
-                              const net = Math.max(formSubtotal - disc, 0);
-                              setFormNetSubtotal(net);
-                              setFormSpendAmount(Number((net + formTax + formTip).toFixed(2)));
-                            }
-                          }}
-                          placeholder="0.00"
-                          className="h-9 text-xs rounded-lg font-mono text-emerald-600 dark:text-emerald-400 font-medium"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Tax & Tip Details */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <Label className="text-xs font-semibold text-foreground block mb-1">
-                          Tax Amount (GST / HST / VAT)
-                        </Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={formTax || ""}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            setFormTax(val);
-                            if (formNetSubtotal !== null && formNetSubtotal > 0) {
-                              setFormSpendAmount(Number((formNetSubtotal + val + formTip).toFixed(2)));
-                            }
-                          }}
-                          placeholder="0.00"
-                          className="h-9 text-xs rounded-lg font-mono"
-                        />
-                      </div>
                       <div>
                         <Label className="text-xs font-semibold text-foreground block mb-1">
                           Tip / Gratuity
                         </Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          value={formTip || ""}
-                          onChange={(e) => {
-                            const val = parseFloat(e.target.value) || 0;
-                            setFormTip(val);
-                            if (formNetSubtotal !== null && formNetSubtotal > 0) {
-                              setFormSpendAmount(Number((formNetSubtotal + formTax + val).toFixed(2)));
-                            }
-                          }}
-                          placeholder="0.00"
-                          className="h-9 text-xs rounded-lg font-mono"
-                        />
+                        <div className="relative">
+                          <DollarSign className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={formTip || ""}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setFormTip(val);
+                              const sub = formSubtotal ?? 0;
+                              const disc = formDiscount ?? 0;
+                              const net = Math.max(sub - disc, 0);
+                              setFormSpendAmount(Number((net + formTax + val).toFixed(2)));
+                            }}
+                            placeholder="0.00"
+                            className="h-9 pl-7 text-xs rounded-lg font-mono"
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground block mt-1">Optional restaurant/driver tip</span>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs font-semibold text-foreground block mb-1">
+                          Discount / Credits
+                        </Label>
+                        <div className="relative">
+                          <DollarSign className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-muted-foreground" />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={formDiscount || ""}
+                            onChange={(e) => {
+                              const disc = parseFloat(e.target.value) || 0;
+                              setFormDiscount(disc);
+                              const sub = formSubtotal ?? 0;
+                              const net = Math.max(sub - disc, 0);
+                              setFormNetSubtotal(net);
+                              setFormSpendAmount(Number((net + formTax + formTip).toFixed(2)));
+                            }}
+                            placeholder="0.00"
+                            className="h-9 pl-7 text-xs rounded-lg font-mono text-emerald-600 dark:text-emerald-400 font-medium"
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground block mt-1">Promos or coupons subtracted</span>
+                      </div>
+                    </div>
+
+                    {/* Grand Total (After-Tax Total) Input & Calculation Summary Strip */}
+                    <div className="p-3.5 rounded-xl bg-card border border-border shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs font-bold text-foreground block">
+                          After-Tax Total (Grand Total) <span className="text-destructive">*</span>
+                        </Label>
+                        <div className="relative w-48">
+                          <DollarSign className="w-4 h-4 absolute left-2.5 top-2.5 text-primary" />
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={formSpendAmount || ""}
+                            onChange={(e) => {
+                              const total = parseFloat(e.target.value) || 0;
+                              setFormSpendAmount(total);
+                              if (formTax > 0 || formTip > 0 || formDiscount > 0) {
+                                const inferredSub = Math.max(0, total - formTax - formTip + formDiscount);
+                                setFormSubtotal(inferredSub);
+                                setFormNetSubtotal(Math.max(0, inferredSub - formDiscount));
+                              } else {
+                                setFormSubtotal(total);
+                                setFormNetSubtotal(total);
+                              }
+                            }}
+                            placeholder="0.00"
+                            className="h-10 pl-8 text-sm rounded-lg font-mono font-bold text-primary"
+                          />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground block">
+                          Final charged transaction amount on receipt
+                        </span>
+                      </div>
+
+                      {/* Live Math Visual Breakdown */}
+                      <div className="flex items-center gap-2 text-xs font-mono bg-muted/40 p-2.5 rounded-lg border border-border/60">
+                        <div className="text-center">
+                          <span className="text-[10px] text-muted-foreground font-sans block">Subtotal</span>
+                          <span className="font-semibold text-foreground">${(formSubtotal ?? Math.max(0, formSpendAmount - formTax - formTip + formDiscount)).toFixed(2)}</span>
+                        </div>
+                        <span className="text-muted-foreground font-bold">+</span>
+                        <div className="text-center">
+                          <span className="text-[10px] text-muted-foreground font-sans block">Tax</span>
+                          <span className="font-semibold text-foreground">${formTax.toFixed(2)}</span>
+                        </div>
+                        {formTip > 0 && (
+                          <>
+                            <span className="text-muted-foreground font-bold">+</span>
+                            <div className="text-center">
+                              <span className="text-[10px] text-muted-foreground font-sans block">Tip</span>
+                              <span className="font-semibold text-foreground">${formTip.toFixed(2)}</span>
+                            </div>
+                          </>
+                        )}
+                        {formDiscount > 0 && (
+                          <>
+                            <span className="text-emerald-600 font-bold">-</span>
+                            <div className="text-center">
+                              <span className="text-[10px] text-emerald-600 font-sans block">Disc</span>
+                              <span className="font-semibold text-emerald-600">${formDiscount.toFixed(2)}</span>
+                            </div>
+                          </>
+                        )}
+                        <span className="text-primary font-bold">=</span>
+                        <div className="text-center pl-1 border-l border-border/80">
+                          <span className="text-[10px] text-primary font-sans font-bold block">After-Tax Total</span>
+                          <span className="font-bold text-primary text-sm">${formSpendAmount.toFixed(2)} {formCurrency}</span>
+                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* SECTION 3: PAYMENT & ACCOUNTING (Pay Through, Reimbursable, Billable) */}
+                  {/* SECTION 3: PAYMENT & EVENT MAPPING */}
                   <div className="space-y-4">
                     <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 border-b border-border/50 pb-1.5">
                       <CreditCard className="w-3.5 h-3.5 text-primary" />
-                      <span>3. Payment & Accounting</span>
+                      <span>3. Payment & Event Mapping</span>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1820,23 +1867,30 @@ export default function ReceiptExpensePage() {
                         </select>
                       </div>
 
-                      {/* Travel Event / Trip */}
+                      {/* Travel Event Autocomplete Combobox */}
                       <div>
-                        <Label className="text-xs font-semibold text-foreground block mb-1">
-                          Associated Travel Event / Trip
+                        <Label className="text-xs font-semibold text-foreground flex items-center justify-between mb-1">
+                          <span>Associated Travel Event / Trip <span className="text-destructive">*</span></span>
+                          {formEventId && (
+                            <button
+                              type="button"
+                              onClick={() => setFormEventId("")}
+                              className="text-[11px] text-muted-foreground hover:text-foreground underline font-normal"
+                            >
+                              Clear Selection
+                            </button>
+                          )}
                         </Label>
-                        <select
+                        <AutocompleteCombobox
                           value={formEventId}
-                          onChange={(e) => setFormEventId(e.target.value)}
-                          className="w-full h-9 rounded-lg border border-input bg-background px-3 text-xs font-medium focus:outline-hidden"
-                        >
-                          {eventsList.map((ev) => (
-                            <option key={ev.id} value={ev.id}>
-                              {ev.title} ({ev.location})
-                            </option>
-                          ))}
-                          {eventsList.length === 0 && <option value="">General Corporate Travel</option>}
-                        </select>
+                          onChange={(val) => setFormEventId(String(val))}
+                          options={eventComboboxOptions}
+                          placeholder="Search & map expense to event..."
+                          className="h-9 text-xs w-full"
+                        />
+                        <span className="text-[10px] text-muted-foreground block mt-1">
+                          Fuzzy search events by title, destination, or date.
+                        </span>
                       </div>
                     </div>
 
@@ -2146,19 +2200,24 @@ export default function ReceiptExpensePage() {
             </div>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Event Filter */}
-              <select
-                value={selectedEventId}
-                onChange={(e) => setSelectedEventId(e.target.value)}
-                className="h-9 rounded-lg border border-input bg-background px-2.5 text-xs font-medium focus:outline-hidden"
-              >
-                <option value="all">All Trips / Events</option>
-                {eventsList.map((ev) => (
-                  <option key={ev.id} value={ev.id}>
-                    {ev.title}
-                  </option>
-                ))}
-              </select>
+              {/* Event Filter Autocomplete */}
+              <div className="w-56">
+                <AutocompleteCombobox
+                  value={selectedEventId}
+                  onChange={(val) => setSelectedEventId(String(val))}
+                  options={[
+                    { id: "all", name: "All Trips / Events", badge: "All" },
+                    ...eventsList.map((ev: any) => ({
+                      id: ev.id || ev.trip_uuid || ev.event_name || "",
+                      name: ev.title || ev.event_name || "Corporate Travel Event",
+                      sublabel: ev.location,
+                      badge: ev.status ? String(ev.status).toUpperCase() : undefined,
+                    })),
+                  ]}
+                  placeholder="Filter by Event..."
+                  className="h-9 text-xs"
+                />
+              </div>
 
               {/* Category Filter */}
               <select
@@ -2491,9 +2550,12 @@ export default function ReceiptExpensePage() {
       {/* ===================== EXPENSE DETAIL MODAL ===================== */}
       <Dialog open={Boolean(selectedReceiptDetail)} onOpenChange={() => setSelectedReceiptDetail(null)}>
         <DialogContent className="sm:max-w-4xl lg:max-w-5xl w-full max-h-[92vh] overflow-y-auto p-6">
-          {!selectedReceiptDetail && (
-            <DialogTitle className="sr-only">Expense Details</DialogTitle>
-          )}
+          <DialogTitle className="sr-only">
+            {selectedReceiptDetail?.merchant_name ? `Expense Record: ${selectedReceiptDetail.merchant_name}` : "Expense Details"}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            Detailed breakdown of receipt expense, tax amount, and event mapping.
+          </DialogDescription>
           {selectedReceiptDetail && (
             <div className="space-y-6">
               <DialogHeader>
@@ -2671,157 +2733,253 @@ export default function ReceiptExpensePage() {
                   )}
                 </div>
 
-                {/* Right Column: Key Details & Itemization */}
+                {/* Right Column: Key Details, Financial Breakdown & Itemization */}
                 <div className={`${selectedReceiptDetail.file_data ? "lg:col-span-7" : "col-span-1"} space-y-4`}>
-                  {/* Amount Summary Strip */}
-                  <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-card border border-border shadow-2xs">
-                    <div>
-                      <span className="text-[11px] font-semibold text-muted-foreground uppercase block mb-0.5">
-                        Amount in CAD
-                      </span>
-                      <span className="text-xl font-bold font-mono text-primary">
-                        ${(Number(selectedReceiptDetail.amount_cad) || Number(selectedReceiptDetail.total_amount) * (Number(selectedReceiptDetail.exchange_rate) || 1.385)).toFixed(2)} CAD
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[11px] font-semibold text-muted-foreground uppercase block mb-0.5">
-                        Original Spend
-                      </span>
-                      <span className="text-base font-bold font-mono text-foreground block">
-                        ${Number(selectedReceiptDetail.total_amount).toFixed(2)} {selectedReceiptDetail.currency}
-                      </span>
-                      {selectedReceiptDetail.currency !== "CAD" && (
-                        <span className="text-[10px] text-muted-foreground font-mono">
-                          Rate: {Number(selectedReceiptDetail.exchange_rate || 1.385).toFixed(4)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                  {(() => {
+                    const recTotal = Number(selectedReceiptDetail.total_amount) || 0;
+                    const recTax = Number(selectedReceiptDetail.tax_amount) || 0;
+                    const recTip = Number(selectedReceiptDetail.tip_amount) || 0;
+                    const recDiscount = Number(selectedReceiptDetail.discount_amount) || 0;
+                    const recSubtotal =
+                      selectedReceiptDetail.subtotal_amount !== undefined &&
+                      selectedReceiptDetail.subtotal_amount !== null &&
+                      Number(selectedReceiptDetail.subtotal_amount) > 0
+                        ? Number(selectedReceiptDetail.subtotal_amount)
+                        : Math.max(0, recTotal - recTax - recTip + recDiscount);
+                    const effectiveTaxRate =
+                      recSubtotal > 0 && recTax > 0 ? ((recTax / recSubtotal) * 100).toFixed(1) : null;
+                    const cadTotal =
+                      Number(selectedReceiptDetail.amount_cad) ||
+                      recTotal * (Number(selectedReceiptDetail.exchange_rate) || 1.385);
+                    const mappedEvent = eventsList.find((e) => e.id === selectedReceiptDetail.event_id);
 
-                  {/* 2-Column Info Grid */}
-                  <div className="grid grid-cols-2 gap-3 text-xs bg-muted/20 p-4 rounded-xl border border-border">
-                    <div>
-                      <span className="text-muted-foreground block mb-0.5 font-medium">Transaction Date</span>
-                      <span className="font-semibold text-foreground">
-                        {selectedReceiptDetail.transaction_date ? String(selectedReceiptDetail.transaction_date).split("T")[0] : "N/A"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block mb-0.5 font-medium">Reference / Receipt #</span>
-                      <span className="font-mono font-semibold text-foreground">
-                        {selectedReceiptDetail.receipt_number || "N/A"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block mb-0.5 font-medium">Category</span>
-                      <span className="font-semibold capitalize text-foreground">
-                        {selectedReceiptDetail.expense_category.replace("_", " ")}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block mb-0.5 font-medium">Policy</span>
-                      <span className="font-semibold text-foreground">
-                        {selectedReceiptDetail.policy || "Standard Corporate Policy"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block mb-0.5 font-medium">Pay Through Account</span>
-                      <span className="font-semibold text-foreground">
-                        {selectedReceiptDetail.payment_method}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block mb-0.5 font-medium">Submitted By</span>
-                      <span className="font-semibold text-foreground">
-                        {selectedReceiptDetail.user_name || "Employee"} {selectedReceiptDetail.user_email ? `(${selectedReceiptDetail.user_email})` : ""}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Real-time Calculation & Discount Verification in Detail View */}
-                  {((selectedReceiptDetail.discount_amount && Number(selectedReceiptDetail.discount_amount) > 0) ||
-                    selectedReceiptDetail.calculation_verified ||
-                    selectedReceiptDetail.extraction_metadata?.discount_amount) && (
-                    <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-xs space-y-2">
-                      <div className="flex items-center justify-between text-emerald-600 dark:text-emerald-400 font-semibold text-xs">
-                        <span className="flex items-center gap-1.5">
-                          <ShieldCheck className="w-4 h-4" />
-                          Real-time Verified Amount & Discount Audit
-                        </span>
-                        <Badge variant="outline" className="text-[10px] bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/40 font-mono">
-                          Calculation Verified
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-3 gap-2 font-mono text-xs pt-1">
-                        <div className="p-2 rounded-lg bg-background/70 border border-border/50">
-                          <span className="text-[10px] text-muted-foreground block font-sans">Gross Subtotal</span>
-                          <span className="font-bold text-foreground">
-                            ${(Number(selectedReceiptDetail.subtotal_amount) || Number(selectedReceiptDetail.extraction_metadata?.subtotal_amount) || (Number(selectedReceiptDetail.total_amount) + Number(selectedReceiptDetail.discount_amount || 0) - Number(selectedReceiptDetail.tax_amount || 0))).toFixed(2)}
-                          </span>
+                    return (
+                      <>
+                        {/* 1. Mapped Event Card */}
+                        <div className="p-3 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0">
+                              <Briefcase className="w-4 h-4" />
+                            </div>
+                            <div>
+                              <span className="text-[10px] font-bold text-primary uppercase tracking-wider block">
+                                Mapped Event / Expedition
+                              </span>
+                              <span className="font-semibold text-foreground text-xs">
+                                {mappedEvent
+                                  ? mappedEvent.title
+                                  : selectedReceiptDetail.event_title || "General Corporate Travel (No Event)"}
+                              </span>
+                              {mappedEvent && (
+                                <span className="text-[11px] text-muted-foreground block">
+                                  {mappedEvent.location} • {mappedEvent.start_date} to {mappedEvent.end_date}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {mappedEvent?.status && (
+                            <Badge variant="outline" className="text-[10px] uppercase font-semibold">
+                              {mappedEvent.status}
+                            </Badge>
+                          )}
                         </div>
-                        <div className="p-2 rounded-lg bg-background/70 border border-emerald-500/40">
-                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block font-sans font-semibold">Discount Deducted</span>
-                          <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                            -${(Number(selectedReceiptDetail.discount_amount) || Number(selectedReceiptDetail.extraction_metadata?.discount_amount) || 0).toFixed(2)}
-                          </span>
+
+                        {/* 2. Elevated Financial Breakdown Ledger (Subtotal, Tax, After-Tax Total) */}
+                        <div className="rounded-xl border border-border bg-card p-4 space-y-3 shadow-2xs">
+                          <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                            <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                              <DollarSign className="w-3.5 h-3.5 text-primary" />
+                              <span>Financial Breakdown</span>
+                            </span>
+                            {selectedReceiptDetail.currency !== "CAD" && (
+                              <Badge variant="outline" className="text-[10px] font-mono bg-muted/40">
+                                1 {selectedReceiptDetail.currency} ≈ {Number(selectedReceiptDetail.exchange_rate || 1.385).toFixed(4)} CAD
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="space-y-2 text-xs">
+                            {/* Pre-Tax Subtotal */}
+                            <div className="flex items-center justify-between py-1">
+                              <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
+                                <span>Pre-Tax Subtotal</span>
+                                <span className="text-[10px] text-muted-foreground/80 font-normal">(Net goods & services)</span>
+                              </span>
+                              <span className="font-mono font-semibold text-foreground text-sm">
+                                ${recSubtotal.toFixed(2)} {selectedReceiptDetail.currency}
+                              </span>
+                            </div>
+
+                            {/* Promotional Discount if applicable */}
+                            {recDiscount > 0 && (
+                              <div className="flex items-center justify-between py-1 text-emerald-600 dark:text-emerald-400">
+                                <span className="flex items-center gap-1.5 font-medium">
+                                  <span>Discount & Promotional Credits</span>
+                                  {selectedReceiptDetail.discount_details && (
+                                    <span className="text-[10px] font-normal italic">
+                                      ({selectedReceiptDetail.discount_details})
+                                    </span>
+                                  )}
+                                </span>
+                                <span className="font-mono font-semibold text-sm">
+                                  -${recDiscount.toFixed(2)} {selectedReceiptDetail.currency}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* Tax Amount */}
+                            <div className="flex items-center justify-between py-1 border-t border-border/40">
+                              <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
+                                <span>Taxes (GST / HST / VAT / Sales Tax)</span>
+                                {effectiveTaxRate && (
+                                  <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-muted/60 text-muted-foreground font-mono">
+                                    {effectiveTaxRate}%
+                                  </Badge>
+                                )}
+                              </span>
+                              <span className="font-mono font-semibold text-foreground text-sm">
+                                +${recTax.toFixed(2)} {selectedReceiptDetail.currency}
+                              </span>
+                            </div>
+
+                            {/* Tip / Gratuity if applicable */}
+                            {recTip > 0 && (
+                              <div className="flex items-center justify-between py-1">
+                                <span className="text-muted-foreground font-medium">Tip / Gratuity</span>
+                                <span className="font-mono font-semibold text-foreground text-sm">
+                                  +${recTip.toFixed(2)} {selectedReceiptDetail.currency}
+                                </span>
+                              </div>
+                            )}
+
+                            {/* After-Tax Total (Grand Total) Highlight */}
+                            <div className="pt-3 mt-2 border-t-2 border-border/80 flex items-center justify-between">
+                              <div>
+                                <span className="text-xs font-bold text-foreground block">
+                                  After-Tax Total (Grand Total)
+                                </span>
+                                <span className="text-[11px] text-muted-foreground">
+                                  Final amount charged to payment method
+                                </span>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-xl font-extrabold font-mono text-primary">
+                                  ${recTotal.toFixed(2)} {selectedReceiptDetail.currency}
+                                </div>
+                                {selectedReceiptDetail.currency !== "CAD" && (
+                                  <div className="text-[11px] font-mono text-muted-foreground font-medium">
+                                    ≈ ${cadTotal.toFixed(2)} CAD
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Reimbursable vs Direct Corporate Card Pill */}
+                            <div className="pt-2 border-t border-border/40 flex items-center justify-between text-[11px]">
+                              <span className="text-muted-foreground">Reimbursement:</span>
+                              {selectedReceiptDetail.is_reimbursable ? (
+                                <span className="text-indigo-600 dark:text-indigo-400 font-semibold flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Due to Employee (${cadTotal.toFixed(2)} CAD)
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground font-medium">
+                                  Paid via Corporate Card (No Reimbursement)
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="p-2 rounded-lg bg-background/70 border border-border/50">
-                          <span className="text-[10px] text-muted-foreground block font-sans">Net Subtotal</span>
-                          <span className="font-bold text-foreground">
-                            ${(Number(selectedReceiptDetail.net_subtotal) || Number(selectedReceiptDetail.extraction_metadata?.net_subtotal) || (Number(selectedReceiptDetail.total_amount) - Number(selectedReceiptDetail.tax_amount || 0))).toFixed(2)}
-                          </span>
+
+                        {/* 3. Accounting & Transaction Details */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs bg-muted/20 p-3.5 rounded-xl border border-border">
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5 font-medium">Transaction Date</span>
+                            <span className="font-semibold text-foreground">
+                              {selectedReceiptDetail.transaction_date ? String(selectedReceiptDetail.transaction_date).split("T")[0] : "N/A"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5 font-medium">Reference / Receipt #</span>
+                            <span className="font-mono font-semibold text-foreground">
+                              {selectedReceiptDetail.receipt_number || "N/A"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5 font-medium">Category</span>
+                            <span className="font-semibold capitalize text-foreground">
+                              {selectedReceiptDetail.expense_category.replace("_", " ")}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5 font-medium">Payment Account</span>
+                            <span className="font-semibold text-foreground">
+                              {selectedReceiptDetail.payment_method}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5 font-medium">Policy</span>
+                            <span className="font-semibold text-foreground truncate block" title={selectedReceiptDetail.policy || ""}>
+                              {selectedReceiptDetail.policy || "Standard Policy"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block mb-0.5 font-medium">Submitted By</span>
+                            <span className="font-semibold text-foreground truncate block" title={selectedReceiptDetail.user_email || ""}>
+                              {selectedReceiptDetail.user_name || "Employee"}
+                            </span>
+                          </div>
+                          {selectedReceiptDetail.attendees && (
+                            <div className="col-span-2 sm:col-span-3 pt-1 border-t border-border/40">
+                              <span className="text-muted-foreground block mb-0.5 font-medium">Attendees / Participants</span>
+                              <span className="font-medium text-foreground">{selectedReceiptDetail.attendees}</span>
+                            </div>
+                          )}
                         </div>
-                      </div>
 
-                      {(selectedReceiptDetail.discount_details || selectedReceiptDetail.extraction_metadata?.discount_details) && (
-                        <p className="text-[11px] text-muted-foreground font-mono italic">
-                          {selectedReceiptDetail.discount_details || selectedReceiptDetail.extraction_metadata?.discount_details}
-                        </p>
-                      )}
-                    </div>
-                  )}
+                        {/* 4. Description / Business Justification */}
+                        {selectedReceiptDetail.description && (
+                          <div className="space-y-1">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Business Purpose</h4>
+                            <p className="text-xs text-foreground bg-muted/20 p-3 rounded-xl border border-border">
+                              {selectedReceiptDetail.description}
+                            </p>
+                          </div>
+                        )}
 
-                  {/* Description / Business Purpose */}
-                  {selectedReceiptDetail.description && (
-                    <div className="space-y-1">
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Business Purpose</h4>
-                      <p className="text-xs text-foreground bg-muted/20 p-3 rounded-xl border border-border">
-                        {selectedReceiptDetail.description}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Line Items Table */}
-                  {getSafeLineItems(selectedReceiptDetail.line_items).length > 0 && (
-                    <div className="space-y-1.5">
-                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Itemized Breakdown</h4>
-                      <div className="border border-border rounded-xl overflow-hidden text-xs">
-                        <table className="w-full text-left">
-                          <thead className="bg-muted/40 text-muted-foreground border-b border-border">
-                            <tr>
-                              <th className="p-2.5">Item</th>
-                              <th className="p-2.5 text-center">Qty</th>
-                              <th className="p-2.5 text-right">Price</th>
-                              <th className="p-2.5 text-right">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-border">
-                            {getSafeLineItems(selectedReceiptDetail.line_items).map((li, i) => (
-                              <tr key={i}>
-                                <td className="p-2.5 text-foreground font-medium">{li.description}</td>
-                                <td className="p-2.5 text-center font-mono">{li.quantity}</td>
-                                <td className="p-2.5 text-right font-mono">${Number(li.unit_price).toFixed(2)}</td>
-                                <td className="p-2.5 text-right font-mono font-bold text-foreground">
-                                  ${Number(li.amount).toFixed(2)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
+                        {/* 5. Itemized Breakdown Table */}
+                        {getSafeLineItems(selectedReceiptDetail.line_items).length > 0 && (
+                          <div className="space-y-1.5">
+                            <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Itemized Breakdown</h4>
+                            <div className="border border-border rounded-xl overflow-hidden text-xs">
+                              <table className="w-full text-left">
+                                <thead className="bg-muted/40 text-muted-foreground border-b border-border">
+                                  <tr>
+                                    <th className="p-2.5">Item</th>
+                                    <th className="p-2.5 text-center">Qty</th>
+                                    <th className="p-2.5 text-right">Price</th>
+                                    <th className="p-2.5 text-right">Total</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border">
+                                  {getSafeLineItems(selectedReceiptDetail.line_items).map((li, i) => (
+                                    <tr key={i}>
+                                      <td className="p-2.5 text-foreground font-medium">{li.description}</td>
+                                      <td className="p-2.5 text-center font-mono">{li.quantity}</td>
+                                      <td className="p-2.5 text-right font-mono">${Number(li.unit_price).toFixed(2)}</td>
+                                      <td className="p-2.5 text-right font-mono font-bold text-foreground">
+                                        ${Number(li.amount).toFixed(2)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -2857,13 +3015,14 @@ export default function ReceiptExpensePage() {
       {/* ===================== FULLSCREEN LIGHTBOX / PREVIEW MODAL ===================== */}
       <Dialog open={lightboxOpen} onOpenChange={setLightboxOpen}>
         <DialogContent className="sm:max-w-4xl lg:max-w-5xl w-full max-h-[92vh] overflow-hidden p-0 flex flex-col bg-neutral-950 border-neutral-800 text-white">
+          <DialogTitle className="sr-only">{lightboxName || "Receipt Attachment Preview"}</DialogTitle>
           <DialogDescription className="sr-only">Receipt preview and attachment viewer</DialogDescription>
           <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-800 bg-neutral-900/90 shrink-0">
             <div className="flex items-center gap-2.5 truncate mr-3">
               <FileText className="w-4 h-4 text-primary shrink-0" />
-              <DialogTitle className="font-semibold text-xs sm:text-sm truncate text-white">
+              <div className="font-semibold text-xs sm:text-sm truncate text-white">
                 {lightboxName || "Receipt Preview"}
-              </DialogTitle>
+              </div>
               <Badge variant="outline" className="text-[10px] uppercase font-mono border-neutral-700 bg-neutral-800 text-neutral-300">
                 {lightboxType.includes("pdf") ? "PDF" : "Image"}
               </Badge>

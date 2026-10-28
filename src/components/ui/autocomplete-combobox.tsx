@@ -50,12 +50,21 @@ export function AutocompleteCombobox({
     }
   }, [open]);
 
+  // Normalize options so name is always a valid string
+  const safeOptions = useMemo(() => {
+    if (!Array.isArray(options)) return [];
+    return options.map((opt) => ({
+      ...opt,
+      name: opt?.name != null ? String(opt.name) : String(opt?.id ?? ""),
+    }));
+  }, [options]);
+
   // Perform fuzzy search
   const results = useMemo(() => {
     if (!search.trim()) {
-      return options.map((opt) => ({ ...opt, score: 0 })).slice(0, 1000);
+      return safeOptions.map((opt) => ({ ...opt, score: 0 })).slice(0, 1000);
     }
-    const fuzz_results = fuzzysort.go(search, options as any, { key: "name", all: true } as any);
+    const fuzz_results = fuzzysort.go(search, safeOptions as any, { key: "name", all: true } as any);
     return (fuzz_results as any)
       .map((res: any) => {
         const rawScore = res.score;
@@ -65,7 +74,7 @@ export function AutocompleteCombobox({
         }
         return {
           id: res.obj.id,
-          name: res.obj.name,
+          name: res.obj.name || "",
           sublabel: res.obj.sublabel,
           badge: res.obj.badge,
           icon: res.obj.icon,
@@ -73,15 +82,16 @@ export function AutocompleteCombobox({
         };
       })
       .slice(0, 1000);
-  }, [search, options]);
+  }, [search, safeOptions]);
 
   const exactMatch = useMemo(() => {
-    return options.some((opt) => opt.name.toLowerCase() === search.trim().toLowerCase());
-  }, [search, options]);
+    const q = search.trim().toLowerCase();
+    return safeOptions.some((opt) => (opt.name || "").toLowerCase() === q);
+  }, [search, safeOptions]);
 
   const selectedOption = useMemo(() => {
-    const found = options.find(
-      (opt) => opt.id === value || (typeof value === "string" && opt.name.toLowerCase() === value.toLowerCase())
+    const found = safeOptions.find(
+      (opt) => opt.id === value || (typeof value === "string" && (opt.name || "").toLowerCase() === value.toLowerCase())
     );
     if (found) return found;
     if (createdOption && createdOption.id === value) return createdOption;
@@ -89,7 +99,7 @@ export function AutocompleteCombobox({
       return { id: value, name: String(value) };
     }
     return undefined;
-  }, [options, value, createdOption]);
+  }, [safeOptions, value, createdOption]);
 
   const handleCreate = async () => {
     if (!onCreate || !search.trim()) return;
@@ -162,7 +172,7 @@ export function AutocompleteCombobox({
                 }}
                 className={cn(
                   "relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2.5 py-1.5 text-xs outline-none hover:bg-accent hover:text-accent-foreground",
-                  value === opt.id || (typeof value === "string" && opt.name.toLowerCase() === value.toLowerCase())
+                  value === opt.id || (typeof value === "string" && (opt.name || "").toLowerCase() === value.toLowerCase())
                     ? "bg-accent/60 text-accent-foreground font-medium"
                     : ""
                 )}
@@ -170,7 +180,7 @@ export function AutocompleteCombobox({
                 <Check
                   className={cn(
                     "h-3.5 w-3.5 shrink-0 text-primary",
-                    value === opt.id || (typeof value === "string" && opt.name.toLowerCase() === value.toLowerCase())
+                    value === opt.id || (typeof value === "string" && (opt.name || "").toLowerCase() === value.toLowerCase())
                       ? "opacity-100"
                       : "opacity-0"
                   )}

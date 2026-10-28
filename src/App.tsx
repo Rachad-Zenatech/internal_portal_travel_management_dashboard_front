@@ -20,16 +20,11 @@ const SystemLogsPage = lazy(() => import("./pages/Logs/SystemLogsPage"));
 const Login = lazy(() => import("./pages/Login"));
 const PendingAccess = lazy(() => import("./pages/PendingAccess"));
 
-const TravelEventsPage = lazy(() => import("./pages/Travel/TravelEventsPage"));
+const TripsEventsPage = lazy(() => import("./pages/Travel/TripsEventsPage"));
 const TravelBudgetPage = lazy(() => import("./pages/Travel/TravelBudgetPage"));
 const TravelStipendPage = lazy(() => import("./pages/Travel/TravelStipendPage"));
 const DroneCargoPage = lazy(() => import("./pages/Travel/DroneCargoPage"));
 const AiTravelAssistantPage = lazy(() => import("./pages/Travel/AiTravelAssistantPage"));
-const AirCanadaSyncPage = lazy(() => import("./pages/Travel/AirCanadaSyncPage"));
-const WeeklyTravelMatrixPage = lazy(() => import("./pages/Travel/WeeklyTravelMatrixPage"));
-const ExecutiveProfilesPage = lazy(() => import("./pages/Travel/ExecutiveProfilesPage"));
-const VehicleLibraryPage = lazy(() => import("./pages/Travel/VehicleLibraryPage"));
-const TravelCalendarPage = lazy(() => import("./pages/Travel/TravelCalendarPage"));
 const ReceiptExpensePage = lazy(() => import("./pages/Travel/ReceiptExpensePage"));
 const ApprovalsPage = lazy(() => import("./pages/Travel/ApprovalsPage"));
 
@@ -81,18 +76,24 @@ function App() {
               />
 
               {/* Travel Operations Routes */}
-              <Route path="/travel" element={<Navigate to="/travel/ai-assistant" replace />} />
+              <Route path="/travel" element={<Navigate to="/travel/events" replace />} />
+              <Route path="/travel/navan" element={<Navigate to="/travel/events" replace />} />
+              <Route path="/travel/navan-bookings" element={<Navigate to="/travel/events" replace />} />
+              <Route path="/travel/navan-expenses" element={<Navigate to="/travel/events" replace />} />
+              <Route path="/travel/weekly-matrix" element={<Navigate to="/travel/events" replace />} />
+              <Route path="/travel/scraper-sync" element={<Navigate to="/travel/events" replace />} />
+              <Route path="/travel/executives" element={<Navigate to="/travel/events" replace />} />
               <Route path="/travel/ai-assistant" element={<AiTravelAssistantPage />} />
-              <Route path="/travel/weekly-matrix" element={<WeeklyTravelMatrixPage />} />
-              <Route path="/travel/scraper-sync" element={<AirCanadaSyncPage />} />
-              <Route path="/travel/executives" element={<ExecutiveProfilesPage />} />
-              <Route path="/travel/events" element={<TravelEventsPage />} />
+              <Route path="/travel/events" element={<TripsEventsPage />} />
+              <Route path="/travel/trips-events" element={<Navigate to="/travel/events" replace />} />
+              <Route path="/travel/all-trips" element={<Navigate to="/travel/events" replace />} />
+              <Route path="/all-trips" element={<Navigate to="/travel/events" replace />} />
               <Route path="/travel/budgets" element={<TravelBudgetPage />} />
               <Route path="/travel/stipends" element={<TravelStipendPage />} />
               <Route path="/travel/drone-cargo" element={<DroneCargoPage />} />
-              <Route path="/travel/vehicles" element={<VehicleLibraryPage />} />
+              <Route path="/travel/vehicles" element={<Navigate to="/travel/events" replace />} />
               <Route path="/travel/flights" element={<Navigate to="/travel/ai-assistant" replace />} />
-              <Route path="/travel/calendar" element={<TravelCalendarPage />} />
+              <Route path="/travel/calendar" element={<Navigate to="/travel/events" replace />} />
               <Route path="/travel/receipts" element={<ReceiptExpensePage />} />
               <Route path="/travel/expenses" element={<ReceiptExpensePage />} />
               <Route path="/travel/approvals" element={<ApprovalsPage />} />

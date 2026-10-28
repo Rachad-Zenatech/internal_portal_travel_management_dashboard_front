@@ -19,6 +19,7 @@ import {
   ChevronDown,
   ChevronUp,
   Terminal,
+  Cpu,
 } from "lucide-react";
 import { travelService } from "@/services/travelService";
 import { flightService } from "@/services/flightService";
@@ -111,6 +112,27 @@ export default function AiTravelAssistantPage() {
   const [loadingStatusText, setLoadingStatusText] = useState<string>("");
   const [expandedThinkingIds, setExpandedThinkingIds] = useState<Set<string>>(new Set());
 
+  // AI Model Selection: "zena-travel-agent" | "gemini" | "llama4"
+  const [selectedModel, setSelectedModel] = useState<"zena-travel-agent" | "gemini" | "llama4">(() => {
+    const saved = localStorage.getItem("zenatech_travel_ai_model");
+    if (saved === "gemini" || saved === "llama4" || saved === "zena-travel-agent") {
+      return saved;
+    }
+    return "zena-travel-agent";
+  });
+
+  const handleModelChange = (model: "zena-travel-agent" | "gemini" | "llama4") => {
+    setSelectedModel(model);
+    localStorage.setItem("zenatech_travel_ai_model", model);
+    const friendlyName =
+      model === "gemini"
+        ? "Google Gemini (with Llama 4 fallback)"
+        : model === "llama4"
+        ? "Llama 4 (llama4:latest)"
+        : "zena-travel-agent (Ollama)";
+    toast.success(`Switched AI chatbot model to ${friendlyName}`);
+  };
+
   const [chatMessages, setChatMessages] = useState<
     Array<{
       id: string;
@@ -198,11 +220,27 @@ export default function AiTravelAssistantPage() {
       message_text: text,
       created_at: new Date().toISOString(),
     };
-    setChatMessages((prev) => [...prev, userMsg]);
+    const botStreamId = "bot-stream-" + Date.now();
+    const botPlaceholder = {
+      id: botStreamId,
+      sender: "bot" as const,
+      message_text: "",
+      model_thinking: "",
+      itinerary_payload: { flights: [], options: [] },
+      created_at: new Date().toISOString(),
+    };
+
+    setChatMessages((prev) => [...prev, userMsg, botPlaceholder]);
     setInputText("");
     setLoading(true);
     setModelThinking("");
-    setLoadingStatusText("Connecting to Ollama (zena-travel-agent)...");
+    setLoadingStatusText(
+      selectedModel === "gemini"
+        ? "Connecting to Google Gemini..."
+        : selectedModel === "llama4"
+        ? "Connecting to Ollama (llama4:latest)..."
+        : "Connecting to Ollama (zena-travel-agent)..."
+    );
 
     let accumulatedThinking = "";
     let accumulatedContent = "";
@@ -214,6 +252,7 @@ export default function AiTravelAssistantPage() {
           conversation_id: conversationId || undefined,
           assistant_name: assistantName,
           message_text: text,
+          model: selectedModel,
         },
         {
           onStatus: (status) => {
@@ -222,12 +261,46 @@ export default function AiTravelAssistantPage() {
           onThinking: (chunk) => {
             accumulatedThinking += chunk;
             setModelThinking(accumulatedThinking);
+            setChatMessages((prev) =>
+              prev.map((m) =>
+                m.id === botStreamId
+                  ? {
+                      ...m,
+                      model_thinking: accumulatedThinking,
+                      itinerary_payload: {
+                        ...(m.itinerary_payload || {}),
+                        model_thinking: accumulatedThinking,
+                      },
+                    }
+                  : m
+              )
+            );
           },
           onContent: (chunk) => {
             accumulatedContent += chunk;
+            setChatMessages((prev) =>
+              prev.map((m) =>
+                m.id === botStreamId
+                  ? { ...m, message_text: accumulatedContent }
+                  : m
+              )
+            );
           },
           onFlights: (flights) => {
             receivedFlights = flights;
+            setChatMessages((prev) =>
+              prev.map((m) =>
+                m.id === botStreamId
+                  ? {
+                      ...m,
+                      itinerary_payload: {
+                        ...(m.itinerary_payload || {}),
+                        flights: flights,
+                      },
+                    }
+                  : m
+              )
+            );
           },
           onDone: (data) => {
             if (data.conversation_id) {
@@ -239,19 +312,27 @@ export default function AiTravelAssistantPage() {
             if (data.messages && data.messages.length > 0) {
               setChatMessages(data.messages);
             } else {
-              const botMsg = {
-                id: "bot-" + Date.now(),
-                sender: "bot" as const,
-                message_text: accumulatedContent || data.reply_text || data.latest_bot_reply || "",
-                model_thinking: accumulatedThinking || data.model_thinking || "",
-                itinerary_payload: {
-                  model_thinking: accumulatedThinking || data.model_thinking || "",
-                  flights: receivedFlights.length > 0 ? receivedFlights : (data.flights || []),
-                  options: data.itinerary_options || [],
-                },
-                created_at: new Date().toISOString(),
-              };
-              setChatMessages((prev) => [...prev, botMsg]);
+              const finalContent = accumulatedContent || data.reply_text || data.latest_bot_reply || "";
+              const finalThinking = accumulatedThinking || data.model_thinking || "";
+              const finalFlights = receivedFlights.length > 0 ? receivedFlights : (data.flights || []);
+              const finalOptions = data.itinerary_options || [];
+
+              setChatMessages((prev) =>
+                prev.map((m) =>
+                  m.id === botStreamId
+                    ? {
+                        ...m,
+                        message_text: finalContent,
+                        model_thinking: finalThinking,
+                        itinerary_payload: {
+                          model_thinking: finalThinking,
+                          flights: finalFlights,
+                          options: finalOptions,
+                        },
+                      }
+                    : m
+                )
+              );
             }
             setLoading(false);
             setModelThinking("");
@@ -259,11 +340,18 @@ export default function AiTravelAssistantPage() {
           onError: async (err) => {
             console.warn("Stream error, falling back to standard API:", err);
             try {
-              setLoadingStatusText("Analyzing request with zena-travel-agent...");
+              setLoadingStatusText(
+                selectedModel === "gemini"
+                  ? "Analyzing request with Google Gemini..."
+                  : selectedModel === "llama4"
+                  ? "Analyzing request with Ollama (llama4:latest)..."
+                  : "Analyzing request with zena-travel-agent..."
+              );
               const res = await travelService.sendAiChat({
                 conversation_id: conversationId || undefined,
                 assistant_name: assistantName,
                 message_text: text,
+                model: selectedModel,
               });
               if (res) {
                 setConversationId(res.conversation_id);
@@ -275,6 +363,18 @@ export default function AiTravelAssistantPage() {
             } catch (fallbackErr) {
               console.error("Fallback error:", fallbackErr);
               toast.error("Failed to communicate with AI Travel Assistant");
+              setChatMessages((prev) =>
+                prev.map((m) =>
+                  m.id === botStreamId
+                    ? {
+                        ...m,
+                        message_text:
+                          m.message_text ||
+                          "I encountered an issue communicating with the selected model. Please try again or switch to another model.",
+                      }
+                    : m
+                )
+              );
             } finally {
               setLoading(false);
               setModelThinking("");
@@ -533,16 +633,62 @@ export default function AiTravelAssistantPage() {
       {activeHubTab === "chat" && (
         <div className={`w-full flex flex-col ${isFullscreen ? "flex-1 min-h-0" : "flex-1 min-h-[620px] h-[calc(100vh-12rem)]"} bg-card rounded-2xl border border-border shadow-xs overflow-hidden`}>
           {/* Chat Session Header */}
-          <div className="p-3 sm:p-4 border-b border-border bg-muted/30 flex items-center justify-between flex-wrap gap-2 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-xs sm:text-sm font-bold text-foreground">
-                Zenatech Travel Agent
-              </span>
-              <Badge variant="outline" className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 font-semibold flex items-center gap-1.5">
-                <Sparkles className="w-3 h-3 text-emerald-500" />
-                Ollama: zena-travel-agent • Real-Time Engine
-              </Badge>
+          <div className="p-3 sm:p-4 border-b border-border bg-muted/30 flex items-center justify-between flex-wrap gap-2.5 shrink-0">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span
+                  className={`w-2.5 h-2.5 rounded-full animate-pulse ${
+                    selectedModel === "gemini"
+                      ? "bg-blue-500 shadow-blue-500/50 shadow-sm"
+                      : selectedModel === "llama4"
+                      ? "bg-amber-500 shadow-amber-500/50 shadow-sm"
+                      : "bg-emerald-500 shadow-emerald-500/50 shadow-sm"
+                  }`}
+                />
+                <span className="text-xs sm:text-sm font-bold text-foreground">
+                  AI Travel Assistant
+                </span>
+              </div>
+
+              {/* Model Switcher Dropdown */}
+              <div className="flex items-center bg-card rounded-xl border border-border shadow-2xs px-2.5 py-1 gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+                  <Cpu className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="text-[11px] font-semibold text-muted-foreground">Model:</span>
+                </div>
+                <select
+                  value={selectedModel}
+                  onChange={(e) => handleModelChange(e.target.value as "zena-travel-agent" | "gemini" | "llama4")}
+                  className="bg-transparent font-semibold text-xs text-foreground focus:outline-none cursor-pointer pr-1"
+                  title="Switch AI Chatbot Model"
+                >
+                  <option value="zena-travel-agent" className="bg-popover text-popover-foreground">
+                    zena-travel-agent (Ollama)
+                  </option>
+                  <option value="gemini" className="bg-popover text-popover-foreground">
+                    gemini (Google Cloud)
+                  </option>
+                  <option value="llama4" className="bg-popover text-popover-foreground">
+                    llama4 (Ollama)
+                  </option>
+                </select>
+                <Badge
+                  variant="outline"
+                  className={`text-[10px] py-0 px-1.5 font-semibold hidden md:inline-flex ${
+                    selectedModel === "gemini"
+                      ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
+                      : selectedModel === "llama4"
+                      ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                      : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                  }`}
+                >
+                  {selectedModel === "gemini"
+                    ? "Cloud AI • Gemini Flash"
+                    : selectedModel === "llama4"
+                    ? "Local • llama4:latest"
+                    : "Local • Travel Fine-Tuned"}
+                </Badge>
+              </div>
             </div>
 
             {/* Actions: Clear Chat & Fullscreen */}
@@ -632,7 +778,14 @@ export default function AiTravelAssistantPage() {
                         : "bg-muted/60 text-foreground border border-border/80 rounded-tl-xs shadow-2xs"
                     }`}
                   >
-                    {msg.message_text}
+                    {msg.message_text ? (
+                      msg.message_text
+                    ) : (
+                      <span className="flex items-center gap-2 text-muted-foreground italic">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-500 shrink-0" />
+                        <span>Generating response...</span>
+                      </span>
+                    )}
                   </div>
 
                   {/* MODEL THINKING REASONING TRACE (Collapsible Accordion) */}
@@ -779,9 +932,28 @@ export default function AiTravelAssistantPage() {
                     </div>
                     <div>
                       <div className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                        <span>zena-travel-agent Thinking...</span>
-                        <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-indigo-500/10 text-indigo-500 border-indigo-500/20 font-mono">
-                          Ollama Live Stream
+                        <span>
+                          {selectedModel === "gemini"
+                            ? "Google Gemini Reasoning..."
+                            : selectedModel === "llama4"
+                            ? "llama4:latest Thinking..."
+                            : "zena-travel-agent Thinking..."}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] py-0 px-1.5 font-mono ${
+                            selectedModel === "gemini"
+                              ? "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                              : selectedModel === "llama4"
+                              ? "bg-amber-500/10 text-amber-500 border-amber-500/20"
+                              : "bg-indigo-500/10 text-indigo-500 border-indigo-500/20"
+                          }`}
+                        >
+                          {selectedModel === "gemini"
+                            ? "Google GenAI API"
+                            : selectedModel === "llama4"
+                            ? "Ollama (llama4:latest)"
+                            : "Ollama (zena-travel-agent)"}
                         </Badge>
                       </div>
                       <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
@@ -791,7 +963,7 @@ export default function AiTravelAssistantPage() {
                     </div>
                   </div>
                   <div className="text-[10px] font-mono text-muted-foreground bg-muted/60 px-2 py-1 rounded-md border border-border">
-                    http://localhost:11434
+                    {selectedModel === "gemini" ? "Google Gemini" : "http://localhost:11434"}
                   </div>
                 </div>
 
@@ -806,6 +978,11 @@ export default function AiTravelAssistantPage() {
                       {modelThinking}
                       <span className="inline-block w-1.5 h-3.5 bg-indigo-400 ml-1 animate-pulse align-middle" />
                     </pre>
+                  ) : selectedModel === "gemini" ? (
+                    <div className="flex items-center gap-2 text-zinc-400 text-[11px] py-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                      <span>Google Gemini connected • Streaming live executive travel plan...</span>
+                    </div>
                   ) : (
                     <div className="flex items-center gap-2 text-zinc-500 text-[11px] py-2">
                       <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />

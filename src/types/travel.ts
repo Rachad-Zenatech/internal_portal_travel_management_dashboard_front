@@ -5,7 +5,7 @@ export interface EventAttendee {
   attendee_name: string;
   attendee_email: string;
   role_in_event: string;
-  attendance_status: "confirmed" | "tentative" | "declined";
+  attendance_status: "confirmed" | "tentative" | "declined" | "ongoing" | "in_progress" | "completed" | string;
   flight_details?: string | null;
   lodging_details?: string | null;
   stipend_amount: number;
@@ -23,8 +23,106 @@ export interface EventAttendee {
   booking_status?: string | null;
   booking_requires_drone_luggage?: boolean;
   booking_pelican_case_tag?: string | null;
+  trip_uuid?: string | null;
+  trip_url?: string | null;
+  flight_plane?: string | null;
+  itinerary?: AttendeeItinerary | null;
+  businessCapabilities?: {
+    supportedSearchTypes?: Record<string, string> | string[];
+    canBookForOthers?: boolean;
+    guestBookingEnabled?: boolean;
+  };
+  travelConditions?: {
+    accommodation?: {
+      hotelConditions?: {
+        numberOfBookingsAllowed?: number;
+        [key: string]: any;
+      };
+      [key: string]: any;
+    };
+    transportation?: {
+      carConditions?: {
+        numberOfBookingsAllowed?: number;
+        [key: string]: any;
+      };
+      flightConditions?: {
+        numberOfBookingsAllowed?: number;
+        [key: string]: any;
+      };
+      trainConditions?: {
+        numberOfBookingsAllowed?: number;
+        [key: string]: any;
+      };
+      [key: string]: any;
+    };
+  };
+  allowed_bookings_counts?: {
+    flight?: number;
+    hotel?: number;
+    car?: number;
+    train?: number;
+  };
+  allowed_bookings_types?: Record<string, boolean>;
+  allowed_bookings?: string | string[];
+  actual_travel_spend?: number;
+  est_travel_spend?: number;
+  departing_from?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface ItineraryFlightSegment {
+  booking_id?: string;
+  booking_uuid?: string | null;
+  airline?: string;
+  airline_code?: string;
+  flight_number?: string;
+  full_flight?: string;
+  from_code?: string;
+  from_city?: string;
+  to_code?: string;
+  to_city?: string;
+  departure_time?: string;
+  arrival_time?: string;
+  cabin?: string;
+  confirmation?: string;
+  eticket?: string;
+  navan_url?: string | null;
+}
+
+export interface ItineraryCarBooking {
+  booking_id?: string;
+  agency?: string;
+  car_type?: string;
+  confirmation?: string;
+  start_date?: string;
+  end_date?: string;
+  car_uuid?: string | null;
+  amount?: number;
+  navan_url?: string | null;
+}
+
+export interface ItineraryHotelBooking {
+  booking_id?: string;
+  hotel_name?: string;
+  confirmation?: string;
+  start_date?: string;
+  end_date?: string;
+  hotel_uuid?: string | null;
+  amount?: number;
+  navan_url?: string | null;
+}
+
+export interface AttendeeItinerary {
+  trip_uuid?: string | null;
+  trip_url?: string | null;
+  flight_summary?: string | null;
+  route_type?: string | null;
+  outbound_flights?: ItineraryFlightSegment[];
+  return_flights?: ItineraryFlightSegment[];
+  all_segments?: ItineraryFlightSegment[];
+  car?: ItineraryCarBooking | null;
+  hotel?: ItineraryHotelBooking | null;
 }
 
 export interface TravelEvent {
@@ -37,13 +135,83 @@ export interface TravelEvent {
   end_date: string;
   coordinator_name?: string | null;
   coordinator_email?: string | null;
-  status: "planning" | "confirmed" | "ongoing" | "completed" | "cancelled";
+  status: "planning" | "confirmed" | "ongoing" | "completed" | "cancelled" | string;
   description?: string | null;
   attendees_count?: number;
   total_budget_allocated?: number;
   total_budget_spent?: number;
+  total_spend?: number;
+  navan_event_id?: string | null;
+  invited_count?: number;
+  booked_count?: number;
+  estimated_budget?: number;
+  is_group_event?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface EventSpendTotals {
+  expected_total: number;
+  committed: number;
+  actual: number;
+  paid: number;
+  still_estimated: number;
+  remaining_balance: number;
+  forecast_remaining: number;
+  percent_committed: number;
+  percent_actual: number;
+  awaiting_invoice: {
+    count: number;
+    amount: number;
+  };
+}
+
+export interface EventExpenseTypeSummary {
+  code: string;
+  name: string;
+  actual: number;
+  committed: number;
+  paid: number;
+  count: number;
+  percent_of_total: number;
+}
+
+export interface EventCostLineItem {
+  id: string;
+  booking_id: string;
+  category_code: string;
+  category_name: string;
+  description: string;
+  vendor: string;
+  traveler_name?: string | null;
+  traveler_email?: string | null;
+  status: "ESTIMATED" | "COMMITTED" | "INVOICED" | "PAID" | "CANCELLED";
+  is_active: boolean;
+  amount: number;
+  base_price: number;
+  taxes_and_fees: number;
+  resort_fee: number;
+  amount_paid: number;
+  parent_booking_spend: number;
+  invoice_ref?: string | null;
+  invoice_url?: string | null;
+  payment_method?: string | null;
+  name_on_card?: string | null;
+  incurred_on?: string | null;
+  source: "NAVAN" | "STIPENDS" | "MANUAL";
+  notes?: string | null;
+}
+
+export interface EventCostsSummary {
+  budget_amount: number;
+  budget_currency: string;
+  totals: EventSpendTotals;
+  by_expense_type: EventExpenseTypeSummary[];
+  by_source: {
+    travel: number;
+    stipends: number;
+  };
+  lines: EventCostLineItem[];
 }
 
 export interface BudgetLineItem {
@@ -96,11 +264,79 @@ export interface TravelerStipend {
   currency: string;
   destination_tier: string;
   payment_method: string;
-  status: "pending" | "approved" | "disbursed" | "settled";
+  status: "pending" | "pending_approval" | "approved" | "disbursed" | "rejected" | "settled" | string;
   disbursed_at?: string | null;
   notes?: string | null;
+  is_custom_override?: boolean;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  rejection_reason?: string | null;
+  pending_daily_rate?: number | null;
+  pending_total_days?: number | null;
+  pending_total_amount?: number | null;
+  pending_notes?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface EventTravelerStipendOverview {
+  attendee_id: string;
+  event_id: string;
+  user_id?: string | null;
+  attendee_name: string;
+  attendee_email: string;
+  role_in_event?: string | null;
+  attendance_status?: string | null;
+  flight_details?: string | null;
+  lodging_details?: string | null;
+  attendee_notes?: string | null;
+  stipend_id?: string | null;
+  daily_rate?: number | null;
+  total_days?: number | null;
+  total_amount?: number | null;
+  currency?: string | null;
+  destination_tier?: string | null;
+  payment_method?: string | null;
+  stipend_status: "not_configured" | "pending_approval" | "approved" | "disbursed" | "rejected" | string;
+  is_custom_override: boolean;
+  pending_daily_rate?: number | null;
+  pending_total_days?: number | null;
+  pending_total_amount?: number | null;
+  pending_notes?: string | null;
+  approved_by?: string | null;
+  approved_at?: string | null;
+  disbursed_at?: string | null;
+  rejection_reason?: string | null;
+  stipend_notes?: string | null;
+  stipend_created_at?: string | null;
+  stipend_updated_at?: string | null;
+}
+
+export interface EventStipendsOverview {
+  id: string;
+  title: string;
+  event_type?: string;
+  location?: string | null;
+  venue?: string | null;
+  start_date: string;
+  end_date: string;
+  duration_days: number;
+  coordinator_name?: string | null;
+  coordinator_email?: string | null;
+  status: string;
+  description?: string | null;
+  default_daily_stipend?: number | null;
+  default_stipend_days?: number | null;
+  stipend_tier?: string | null;
+  stipend_payment_method?: string | null;
+  stipend_approval_status?: string | null;
+  total_attendees: number;
+  approved_stipends_count: number;
+  pending_stipends_count: number;
+  disbursed_stipends_count: number;
+  approved_stipends_total: number;
+  pending_stipends_total: number;
+  travelers: EventTravelerStipendOverview[];
 }
 
 export interface SpecialCoverage {
@@ -413,8 +649,51 @@ export interface TravelVehicle {
   departure_message?: string | null;
   departure_updated_at?: string | null;
   departure_updated_by?: string | null;
+  car_image_url?: string | null;
+  rental_company_name?: string | null;
+  mileage?: string | null;
+  passenger_description?: string | null;
+  bag_description?: string | null;
+  navan_url?: string | null;
+  navan_pickup_url?: string | null;
+  navan_dropoff_url?: string | null;
+  navan_printable_url?: string | null;
+  car_description?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface VehicleScrapeRequest {
+  url: string;
+  vehicle_id?: string;
+  vendor?: string;
+  raw_html?: string;
+}
+
+export interface VehicleScrapeResponse {
+  status: string;
+  specs: {
+    category?: string;
+    make?: string;
+    model?: string;
+    vehicle_name?: string;
+    vehicle_class?: string;
+    seating_capacity?: number;
+    cargo_cases_capacity?: number;
+    passengers?: string;
+    passenger_description?: string;
+    baggage?: string;
+    bag_description?: string;
+    mileage?: string;
+    car_image_url?: string;
+    agency?: string;
+    navan_url?: string;
+    pickup_url?: string;
+    dropoff_url?: string;
+    printable_url?: string;
+    confirmation_number?: string;
+  };
+  vehicle?: TravelVehicle | null;
 }
 
 export interface VehicleDepartureBroadcastPayload {
@@ -625,3 +904,233 @@ export interface VehicleCatalogResponse {
   common_models: string[];
 }
 
+export interface NavanConnectionStatus {
+  configured: boolean;
+  status: "online" | "ip_restricted" | "missing_credentials" | "error";
+  authenticated: boolean;
+  scope?: string;
+  company_uuid?: string;
+  allowed_ips?: string;
+  detected_public_ip?: string;
+  ip_match?: boolean;
+  features?: {
+    bookings_read: boolean;
+    liquid_read: boolean;
+  };
+  advisory?: string | null;
+  database?: {
+    stored_bookings: number;
+    stored_expenses: number;
+  };
+}
+
+export interface NavanBooking {
+  id: string;
+  uuid: string;
+  booking_id: string;
+  booking_type: "FLIGHT" | "HOTEL" | "CAR" | "RAIL" | string;
+  booking_status: "CONFIRMED" | "CANCELLED" | "PENDING" | string;
+  trip_name?: string | null;
+  event_name?: string | null;
+  event_id?: string | null;
+  traveler_name: string;
+  traveler_email: string;
+  vendor: string;
+  airline_route?: string | null;
+  origin?: string | null;
+  destination?: string | null;
+  start_date: string;
+  end_date?: string | null;
+  cabin?: string | null;
+  grand_total: number;
+  usd_grand_total: number;
+  currency: string;
+  out_of_policy: boolean;
+  out_of_policy_violations?: string | null;
+  approval_status: string;
+  hotel_name?: string | null;
+  car_type?: string | null;
+  synced_at?: string;
+}
+
+export interface NavanExpense {
+  id: string;
+  transaction_id: string;
+  report_id?: string;
+  user_name: string;
+  user_email: string;
+  merchant_name: string;
+  amount: number;
+  usd_amount: number;
+  currency: string;
+  category: string;
+  payment_method: string;
+  status: string;
+  transaction_date: string;
+  receipt_url?: string | null;
+  policy_compliant: boolean;
+  approver_name?: string | null;
+  synced_at?: string;
+}
+
+export interface NavanOverview {
+  connection: NavanConnectionStatus;
+  metrics: {
+    total_bookings: number;
+    total_booking_spend: number;
+    flights_count: number;
+    hotels_count: number;
+    cars_count: number;
+    rail_count: number;
+    out_of_policy_count: number;
+    pending_approvals: number;
+    total_transactions: number;
+    total_expense_spend: number;
+    non_compliant_expenses: number;
+  };
+  category_distribution: Array<{
+    category: string;
+    count: number;
+    amount: number;
+  }>;
+  recent_bookings: NavanBooking[];
+  recent_expenses: NavanExpense[];
+}
+
+export interface NavanSyncedEvent {
+  id: string;
+  title: string;
+  event_type: string;
+  location: string;
+  venue?: string | null;
+  start_date: string;
+  end_date: string;
+  coordinator_name?: string | null;
+  coordinator_email?: string | null;
+  status: "planning" | "confirmed" | "ongoing" | "completed" | "cancelled" | string;
+  description?: string | null;
+  attendees_count: number;
+  total_spent: number;
+  total_budget: number;
+  roster: Array<{
+    id: string;
+    attendee_name: string;
+    attendee_email: string;
+    role_in_event: string;
+    attendance_status: string;
+    flight_details?: string | null;
+    lodging_details?: string | null;
+    stipend_amount: number;
+    notes?: string | null;
+  }>;
+}
+
+export interface NavanGroupAttendee {
+  name: string;
+  email: string;
+  employee_id: string | null;
+  type: "EMPLOYEE" | "GUEST";
+}
+
+export interface NavanGroupBookingItem {
+  bookingId: string;
+  bookingType: string;
+  bookingStatus: string;
+  employeeId: string | null;
+  amount: number;
+  currency: string;
+  startDate: string | null;
+  endDate: string | null;
+}
+
+export interface NavanGroupEventSummary {
+  event_name: string;
+  total_bookings: number;
+  total_spend: Record<string, number>;
+  attendees: NavanGroupAttendee[];
+  bookings: NavanGroupBookingItem[];
+}
+
+export type NavanGroupEventsMap = Record<string, NavanGroupEventSummary>;
+
+export interface TripBookingDetail {
+  booking_id: string;
+  booking_type: string;
+  booking_status: string;
+  vendor?: string | null;
+  origin?: string | null;
+  destination?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  amount: number;
+  confirmation_number?: string | null;
+  flight_number?: string | null;
+  airline_code?: string | null;
+  cabin_class?: string | null;
+  hotel_room_name?: string | null;
+  hotel_address?: string | null;
+  hotel_city?: string | null;
+  rental_company?: string | null;
+  vehicle_name?: string | null;
+  car_description?: string | null;
+  car_model?: string | null;
+  car_make?: string | null;
+  seats?: number | null;
+  bags?: number | null;
+  pickup_time?: string | null;
+  drop_off_time?: string | null;
+  pickup_location?: string | null;
+  dropoff_location?: string | null;
+  car_uuid?: string | null;
+  trip_uuid?: string | null;
+  is_round_trip?: boolean | null;
+  route_type?: string | null;
+  flight_total_amount?: number | null;
+  departure_flight_amount?: number | null;
+  return_flight_amount?: number | null;
+  parent_booking_uuid?: string | null;
+  outbound?: {
+    origin?: string | null;
+    destination?: string | null;
+    route_path?: string | null;
+    flight_numbers?: string | null;
+    date?: string | null;
+    cabin?: string | null;
+    amount?: number | null;
+    departure_time?: string | null;
+    arrival_time?: string | null;
+    segments?: any[] | null;
+  } | null;
+  return_leg?: {
+    origin?: string | null;
+    destination?: string | null;
+    route_path?: string | null;
+    flight_numbers?: string | null;
+    date?: string | null;
+    cabin?: string | null;
+    amount?: number | null;
+    departure_time?: string | null;
+    arrival_time?: string | null;
+    segments?: any[] | null;
+  } | null;
+}
+
+export interface TripUser {
+  name: string;
+  email?: string | null;
+  total_spend: number;
+  booking_count: number;
+  booking_types: string[];
+  bookings: TripBookingDetail[];
+}
+
+export interface EventTripGroup {
+  event_name: string;
+  location?: string | null;
+  total_spend: number;
+  total_bookings: number;
+  travelers_count: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  users: TripUser[];
+}
