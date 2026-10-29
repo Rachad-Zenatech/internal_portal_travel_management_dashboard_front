@@ -4,6 +4,7 @@ import {
   FileClock,
   Plane,
   ClipboardCheck,
+  Compass,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -47,6 +48,16 @@ export const navigation: NavigationItem[] = [
       { label: "User Stipends", path: "/travel/stipends" },
       { label: "Drone Cargo & Coverage", path: "/travel/drone-cargo" },
       { label: "Expenses", path: "/travel/receipts" },
+    ],
+  },
+  {
+    label: "Travel",
+    icon: Compass,
+    section: "DUFFEL INTEGRATION",
+    subItems: [
+      { label: "Search & Book", path: "/travel/duffel/search" },
+      { label: "My Trips", path: "/travel/duffel/trips" },
+      { label: "Bookings", path: "/travel/duffel/bookings" },
     ],
   },
   {

@@ -27,6 +27,10 @@ const DroneCargoPage = lazy(() => import("./pages/Travel/DroneCargoPage"));
 const AiTravelAssistantPage = lazy(() => import("./pages/Travel/AiTravelAssistantPage"));
 const ReceiptExpensePage = lazy(() => import("./pages/Travel/ReceiptExpensePage"));
 const ApprovalsPage = lazy(() => import("./pages/Travel/ApprovalsPage"));
+const DuffelSearchBookPage = lazy(() => import("./pages/Duffel/SearchBookPage"));
+const DuffelMyTripsPage = lazy(() => import("./pages/Duffel/MyTripsPage"));
+const DuffelBookingsPage = lazy(() => import("./pages/Duffel/BookingsPage"));
+const DuffelBookingDetailPage = lazy(() => import("./pages/Duffel/BookingDetailPage"));
 
 function NotFoundAlert() {
   return (
@@ -98,6 +102,13 @@ function App() {
               <Route path="/travel/expenses" element={<ReceiptExpensePage />} />
               <Route path="/travel/approvals" element={<ApprovalsPage />} />
               <Route path="/approvals" element={<Navigate to="/travel/approvals" replace />} />
+
+              {/* Duffel Integration (flights, hotels, rental cars) */}
+              <Route path="/travel/duffel" element={<Navigate to="/travel/duffel/search" replace />} />
+              <Route path="/travel/duffel/search" element={<DuffelSearchBookPage />} />
+              <Route path="/travel/duffel/trips" element={<DuffelMyTripsPage />} />
+              <Route path="/travel/duffel/bookings" element={<DuffelBookingsPage />} />
+              <Route path="/travel/duffel/bookings/:id" element={<DuffelBookingDetailPage />} />
 
               {/* Configuration Routes */}
               <Route path="/configuration" element={<Navigate to="/configurations/users" replace />} />
