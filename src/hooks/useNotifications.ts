@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiClient, BASE_URL } from "@/services/apiClient";
+import { appStorage } from "@/lib/storage";
 
 export interface Notification {
   id: number;
@@ -79,7 +80,8 @@ function openSocket() {
     const base = /^https?:\/\//i.test(BASE_URL)
       ? toWebSocketScheme(BASE_URL)
       : `${toWebSocketScheme(window.location.origin)}${BASE_URL}`;
-    const storedToken = sessionStorage.getItem("token");
+    // Same lookup as apiClient, so the socket authenticates whenever HTTP calls do
+    const storedToken = appStorage.getItem("token");
     const tokenParam = isTokenUsable(storedToken) ? `?token=${encodeURIComponent(storedToken)}` : "";
 
     const ws = new WebSocket(`${base}/ws/notifications${tokenParam}`);

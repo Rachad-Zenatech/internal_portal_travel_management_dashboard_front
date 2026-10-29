@@ -448,6 +448,24 @@ export interface TravelDashboardSummary {
   };
 }
 
+export interface TripLocationPin {
+  event_id: string;
+  title: string;
+  start_date: string | null;
+  end_date: string | null;
+  status: string | null;
+  place: string;
+  address: string | null;
+  latitude: number;
+  longitude: number;
+  source: "hotel" | "destination";
+}
+
+export interface TripLocationsResponse {
+  locations: TripLocationPin[];
+  pending_geocodes: number;
+}
+
 export interface LoyaltyProgram {
   id: string;
   executive_id: string;

@@ -43,6 +43,8 @@ export const navigation: NavigationItem[] = [
     section: "TRAVEL OPERATIONS",
     subItems: [
       { label: "Trips / Events", path: "/travel/events" },
+      { label: "Trip Calendar & Meeting Spots", path: "/travel/calendar" },
+      { label: "Vehicle & Seat Library", path: "/travel/vehicles" },
       { label: "AI Travel Assistant", path: "/travel/ai-assistant" },
       { label: "Trip Budgeting", path: "/travel/budgets" },
       { label: "User Stipends", path: "/travel/stipends" },

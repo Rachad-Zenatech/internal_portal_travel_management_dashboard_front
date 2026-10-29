@@ -10,6 +10,7 @@ import type {
   DroneCombatGear,
   SpecialLuggageManifest,
   TravelDashboardSummary,
+  TripLocationsResponse,
   EventCostsSummary,
   TravelVehicle,
   EventTripGroup,
@@ -19,6 +20,8 @@ export const travelService = {
   // Summary
   getDashboardSummary: () =>
     apiClient.get<TravelDashboardSummary>("/api/travel/dashboard/summary"),
+  getTripLocations: () =>
+    apiClient.get<TripLocationsResponse>("/api/travel/dashboard/trip-locations"),
 
   // All Trips & Grouped Bookings
   getAllTrips: () => apiClient.get<EventTripGroup[]>("/api/travel/all-trips"),
@@ -290,10 +293,11 @@ export const travelService = {
     if (params?.userEmail) q.append("user_email", params.userEmail);
     if (params?.userName) q.append("user_name", params.userName);
     if (params?.isAdminOverride) q.append("is_admin_override", "true");
-    const qs = q.toString();
-    return apiClient.get<import("@/types/travel").TravelVehicle[]>(
-      qs ? `/api/travel/vehicles?${qs}` : "/api/travel/vehicles"
-    );
+    // The endpoint is paginated (default 50); fleet totals need every vehicle, so ask for the max page.
+    q.append("page_size", "200");
+    return apiClient
+      .get<{ items: import("@/types/travel").TravelVehicle[]; total: number }>(`/api/travel/vehicles?${q.toString()}`)
+      .then((res) => res.items);
   },
   createVehicle: (payload: Partial<import("@/types/travel").TravelVehicle>) =>
     apiClient.post<import("@/types/travel").TravelVehicle>("/api/travel/vehicles", payload),
