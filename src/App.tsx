@@ -25,6 +25,8 @@ const TripsEventsPage = lazy(() => import("./pages/Travel/TripsEventsPage"));
 const TravelBudgetPage = lazy(() => import("./pages/Travel/TravelBudgetPage"));
 const TravelStipendPage = lazy(() => import("./pages/Travel/TravelStipendPage"));
 const DroneCargoPage = lazy(() => import("./pages/Travel/DroneCargoPage"));
+const TravelCalendarPage = lazy(() => import("./pages/Travel/TravelCalendarPage"));
+const VehicleLibraryPage = lazy(() => import("./pages/Travel/VehicleLibraryPage"));
 const AiTravelAssistantPage = lazy(() => import("./pages/Travel/AiTravelAssistantPage"));
 const ReceiptExpensePage = lazy(() => import("./pages/Travel/ReceiptExpensePage"));
 const ApprovalsPage = lazy(() => import("./pages/Travel/ApprovalsPage"));
@@ -102,9 +104,9 @@ function App() {
               <Route path="/travel/budgets" element={<TravelBudgetPage />} />
               <Route path="/travel/stipends" element={<TravelStipendPage />} />
               <Route path="/travel/drone-cargo" element={<DroneCargoPage />} />
-              <Route path="/travel/vehicles" element={<Navigate to="/travel/events" replace />} />
+              <Route path="/travel/vehicles" element={<VehicleLibraryPage />} />
               <Route path="/travel/flights" element={<Navigate to="/travel/ai-assistant" replace />} />
-              <Route path="/travel/calendar" element={<Navigate to="/travel/events" replace />} />
+              <Route path="/travel/calendar" element={<TravelCalendarPage />} />
               <Route path="/travel/receipts" element={<ReceiptExpensePage />} />
               <Route path="/travel/expenses" element={<ReceiptExpensePage />} />
               <Route path="/travel/approvals" element={<ApprovalsPage />} />

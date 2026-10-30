@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { useQuery } from "@tanstack/react-query";
@@ -14,7 +15,10 @@ import {
   Shield,
   Crosshair,
   ArrowRight,
+  Globe2,
+  MapPin,
 } from "lucide-react";
+import { TripGlobe } from "@/components/Travel/TripGlobe";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +42,16 @@ export default function Dashboard() {
     queryKey: ["roles"],
     queryFn: () => apiClient.get<Role[]>("/api/configuration/roles").catch(() => []),
   });
+
+  // Trip destinations for the globe; keep polling while the backend is still geocoding cities
+  const { data: tripLocations } = useQuery({
+    queryKey: ["travelTripLocations"],
+    queryFn: travelService.getTripLocations,
+    refetchInterval: (query) => ((query.state.data?.pending_geocodes ?? 0) > 0 ? 8000 : false),
+  });
+  const tripPins = tripLocations?.locations ?? [];
+  const [selectedTripId, setSelectedTripId] = useState<string | null>(null);
+  const focusedTripId = selectedTripId ?? tripPins[0]?.event_id ?? null;
 
   const budgetUtilization =
     summary?.budget?.allocated && summary.budget.allocated > 0
@@ -260,6 +274,63 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Trip Destinations Globe: only when events have trips */}
+      {tripPins.length > 0 && (
+        <Card className="border-border shadow-xs">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Globe2 className="w-4 h-4 text-primary" />
+              <span>Trip Destinations</span>
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Where each event's trip is headed. Pins use the trip's hotel, or the flight destination city when no hotel is booked. Select a trip to spin the globe to it.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0 grid grid-cols-1 lg:grid-cols-5 gap-6 items-center">
+            <div className="lg:col-span-2 min-w-0">
+              <TripGlobe pins={tripPins} focusedId={focusedTripId} />
+            </div>
+            <ul className="lg:col-span-3 min-w-0 max-h-[420px] overflow-y-auto divide-y divide-border rounded-lg border border-border">
+              {tripPins.map((pin) => {
+                const isFocused = pin.event_id === focusedTripId;
+                return (
+                  <li key={pin.event_id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTripId(pin.event_id)}
+                      aria-pressed={isFocused}
+                      className={`w-full text-left px-3 py-2.5 text-xs flex items-start gap-2.5 transition-colors hover:bg-accent/50 ${
+                        isFocused ? "bg-accent/60" : ""
+                      }`}
+                    >
+                      <MapPin
+                        className={`w-4 h-4 mt-0.5 shrink-0 ${isFocused ? "text-orange-500" : "text-emerald-500"}`}
+                      />
+                      <span className="min-w-0 flex-1 space-y-0.5">
+                        <span className="flex items-center gap-2">
+                          <span className="font-semibold text-foreground text-sm truncate">{pin.title}</span>
+                          <Badge variant="outline" className="text-[10px] shrink-0">
+                            {pin.source === "hotel" ? "Hotel" : "City"}
+                          </Badge>
+                        </span>
+                        <span className="block text-muted-foreground truncate" title={pin.address ?? pin.place}>
+                          {pin.place}
+                        </span>
+                        {pin.start_date && (
+                          <span className="block text-muted-foreground">
+                            {pin.start_date} → {pin.end_date}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent Upcoming Expeditions & System Administration Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

@@ -331,7 +331,7 @@ export default function ReceiptExpensePage() {
   });
 
   const allCount =
-    (!Array.isArray(allReceiptsCountData) && allReceiptsCountData?.stats?.total_receipts) ??
+    (Array.isArray(allReceiptsCountData) ? undefined : allReceiptsCountData?.stats?.total_receipts) ??
     (Array.isArray(allReceiptsCountData) ? allReceiptsCountData.length : allReceiptsCountData?.receipts?.length) ??
     (perspectiveMode === "leadership" ? receiptsList.length : 0);
 
