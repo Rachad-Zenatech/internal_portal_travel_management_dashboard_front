@@ -190,9 +190,10 @@ export function ProductIcon({ product, className }: { product: ProductType; clas
 // ---- formatting -------------------------------------------------------------
 export function formatMoney(m?: Money | null): string {
   if (!m) return "—";
+  if (!m.currency) return m.amount;
   const n = Number(m.amount);
   try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency: m.currency ?? "USD" }).format(n);
+    return `${new Intl.NumberFormat(undefined, { style: "currency", currency: m.currency }).format(n)} ${m.currency}`;
   } catch {
     return `${m.amount} ${m.currency ?? ""}`;
   }

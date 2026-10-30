@@ -5,6 +5,8 @@ import {
   Plane,
   ClipboardCheck,
   Compass,
+  Building2,
+  PlaneTakeoff,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -58,6 +60,24 @@ export const navigation: NavigationItem[] = [
       { label: "Search & Book", path: "/travel/duffel/search" },
       { label: "My Trips", path: "/travel/duffel/trips" },
       { label: "Bookings", path: "/travel/duffel/bookings" },
+    ],
+  },
+  {
+    label: "Hotels",
+    icon: Building2,
+    section: "LITE INTEGRATION",
+    subItems: [
+      { label: "Search & Book", path: "/travel/liteapi/search" },
+      { label: "Bookings", path: "/travel/liteapi/bookings" },
+    ],
+  },
+  {
+    label: "Flights",
+    icon: PlaneTakeoff,
+    section: "SABRE INTEGRATION",
+    subItems: [
+      { label: "Search & Book", path: "/travel/sabre/search" },
+      { label: "Bookings", path: "/travel/sabre/bookings" },
     ],
   },
   {

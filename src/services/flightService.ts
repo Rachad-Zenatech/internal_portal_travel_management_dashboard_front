@@ -11,6 +11,21 @@ export const flightService = {
   searchAirports: (query: string) =>
     apiClient.get<Airport[]>(`/api/travel/flights/airports?q=${encodeURIComponent(query)}`),
 
+  recordActivity: (
+    explorer_session_id: string,
+    events: { event_type: string; summary: string; payload?: Record<string, unknown>; occurred_at: string }[]
+  ) =>
+    apiClient.post<{ recorded: number }>(
+      "/api/travel/flights/activity",
+      { explorer_session_id, events },
+      { skipGlobalLoading: true }
+    ),
+
+  getActivity: (limit = 100) =>
+    apiClient.get<
+      { id: number; explorer_session_id: string; event_type: string; summary: string; payload: Record<string, unknown>; occurred_at: string }[]
+    >(`/api/travel/flights/activity?limit=${limit}`, { skipGlobalLoading: true }),
+
   searchFlights: (filters: FlightSearchFilters) =>
     apiClient.post<FlightSearchResponse>("/api/travel/flights/search", filters),
 

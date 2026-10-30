@@ -73,15 +73,6 @@ export default function CarsTab({
   // Where the residence country came from: filled from the pick-up location, or typed by the user (never overwritten).
   const [residenceSource, setResidenceSource] = useState<"auto" | "user" | null>(null);
 
-  useEffect(() => {
-    if (!sessionId || results) return;
-    duffelService
-      .getSearchSession(sessionId)
-      .then((s) => (s.expired ? setExpired(true) : setResults(s.results as CarRate[])))
-      .catch(() => setSessionId(""));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
 
   const formError = useMemo(() => {
@@ -129,6 +120,17 @@ export default function CarsTab({
   }
 
   /** Back to a blank search: form, results, session and filters. */
+  // Returning to this tab (or back from details) searches Duffel again with the same criteria: saved results are never re-shown.
+  useEffect(() => {
+    if (!sessionId || results) return;
+    if (formError) {
+      setSessionId("");
+      return;
+    }
+    void search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function resetSearch() {
     setForm({
       ...defaultForm,

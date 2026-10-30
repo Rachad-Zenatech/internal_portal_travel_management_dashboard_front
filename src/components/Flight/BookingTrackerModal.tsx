@@ -20,6 +20,7 @@ import {
   Plane,
 } from "lucide-react";
 import { flightService } from "@/services/flightService";
+import { FlightActivityTimeline } from "./FlightActivityTimeline";
 import type { FlightBookingSession } from "@/types/flight";
 
 interface BookingTrackerModalProps {
@@ -495,28 +496,19 @@ export const BookingTrackerModal: React.FC<BookingTrackerModalProps> = ({
               Complete history of status transitions and telemetry captured for this booking session.
             </div>
 
-            <div className="divide-y divide-border/60 border border-border rounded-xl overflow-hidden bg-card">
+            <div className="border border-border rounded-xl bg-card p-4">
               {session.audit_logs && session.audit_logs.length > 0 ? (
-                session.audit_logs.map((log) => (
-                  <div key={log.id} className="p-3 text-xs flex items-start justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-foreground">{log.event_type}</span>
-                        <Badge variant="outline" className="text-[10px] uppercase">
-                          {log.source}
-                        </Badge>
-                      </div>
-                      <pre className="text-[11px] text-muted-foreground font-mono bg-muted/40 p-1.5 rounded max-w-lg overflow-x-auto">
-                        {JSON.stringify(log.payload, null, 2)}
-                      </pre>
-                    </div>
-                    <span className="text-[11px] text-muted-foreground font-mono shrink-0">
-                      {new Date(log.created_at).toLocaleTimeString()}
-                    </span>
-                  </div>
-                ))
+                <FlightActivityTimeline
+                  events={[...session.audit_logs].reverse().map((log) => ({
+                    id: String(log.id),
+                    event_type: log.event_type,
+                    summary: `${log.event_type.replace(/_/g, " ").toLowerCase()} (${log.source})`,
+                    payload: log.payload,
+                    occurred_at: log.created_at,
+                  }))}
+                />
               ) : (
-                <div className="p-4 text-center text-xs text-muted-foreground">No audit logs recorded yet</div>
+                <div className="text-center text-xs text-muted-foreground">No audit logs recorded yet</div>
               )}
             </div>
           </div>

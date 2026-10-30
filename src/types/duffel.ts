@@ -148,6 +148,8 @@ export interface FlightSlice {
 export interface FlightOffer {
   provider_ref: string;
   product_type: "flight";
+  /** Synthetic offer that Duffel's sandbox adds to every search (not a real schedule or fare). */
+  is_test_offer?: boolean;
   expires_at: string | null;
   owner: Carrier | null;
   airlines: string[];

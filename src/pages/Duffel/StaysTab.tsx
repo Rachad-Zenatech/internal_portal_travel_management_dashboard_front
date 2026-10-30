@@ -62,15 +62,6 @@ export default function StaysTab({
   const [amenity, setAmenity] = useState("");
   const [sort, setSort] = useState<"price" | "rating">("price");
 
-  useEffect(() => {
-    if (!sessionId || results) return;
-    duffelService
-      .getSearchSession(sessionId)
-      .then((s) => (s.expired ? setExpired(true) : setResults(s.results as StayResult[])))
-      .catch(() => setSessionId(""));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
   const nights = Math.round((new Date(form.check_out_date).getTime() - new Date(form.check_in_date).getTime()) / 86400000);
 
@@ -112,6 +103,17 @@ export default function StaysTab({
       setLoading(false);
     }
   }
+
+  // Returning to this tab (or back from details) searches Duffel again with the same criteria: saved results are never re-shown.
+  useEffect(() => {
+    if (!sessionId || results) return;
+    if (formError) {
+      setSessionId("");
+      return;
+    }
+    void search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function sandboxForm(): FormState | null {
     if (!preset) return null;

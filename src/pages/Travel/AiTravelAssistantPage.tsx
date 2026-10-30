@@ -37,6 +37,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { FlightCard } from "@/components/Flight/FlightCard";
 import { AirportCombobox } from "@/components/Flight/AirportCombobox";
 import { BookingTrackerModal } from "@/components/Flight/BookingTrackerModal";
+import { FlightActivityTimeline } from "@/components/Flight/FlightActivityTimeline";
+import { useFlightActivity } from "@/hooks/useFlightActivity";
 import { useAuth } from "@/lib/AuthContext";
 import { toast } from "sonner";
 
@@ -46,6 +48,7 @@ export default function AiTravelAssistantPage() {
   const [activeHubTab, setActiveHubTab] = useState<"chat" | "explorer" | "saved" | "sessions">("chat");
 
   // Flight Explorer State
+  const { track, events: activityEvents, history: activityHistory } = useFlightActivity();
   const [searchOrigin, setSearchOrigin] = useState<string>("YYZ");
   const [searchDestination, setSearchDestination] = useState<string>("LAS");
   const [searchTripType, setSearchTripType] = useState<"round_trip" | "one_way">("round_trip");
@@ -398,6 +401,7 @@ export default function AiTravelAssistantPage() {
   };
 
   const handleContinueToBooking = async (flight: FlightSearchResultItem) => {
+    track("BOOKING_STARTED", `Selected ${flight.airline_name} ${flight.flight_numbers} for booking (${flight.price} ${flight.currency})`, { option_id: flight.option_id, price: flight.price });
     try {
       const targetExec = executives.find((e) => e.name === selectedExecName);
 
@@ -418,6 +422,7 @@ export default function AiTravelAssistantPage() {
       });
 
       if (session) {
+        track("BOOKING_SESSION_CREATED", `Tracking session started with ${session.provider_name}`, { session_id: session.id });
         setActiveSession(session);
         setIsModalOpen(true);
         loadRecentSessions();
@@ -445,9 +450,17 @@ export default function AiTravelAssistantPage() {
           source: "web_app",
           raw_payload: { action: "booking_url_opened_in_new_tab" },
         });
+        track("BOOKING_LINK_OPENED", `Opened ${session.provider_name} booking page in a new tab`, { session_id: session.id });
       }
     } catch (e) {
       console.error("Failed to initiate booking session", e);
+      track("BOOKING_FAILED", `Could not start booking: ${(e as Error)?.message ?? "unknown error"}`);
+    }
+  };
+
+  const handleToggleDetails = (flight: FlightSearchResultItem, expanded: boolean) => {
+    if (expanded) {
+      track("FLIGHT_DETAILS_VIEWED", `Viewed details: ${flight.airline_name} ${flight.flight_numbers}, ${flight.stops_summary}`, { option_id: flight.option_id });
     }
   };
 
@@ -465,6 +478,7 @@ export default function AiTravelAssistantPage() {
         source_url: flight.booking_url,
         itinerary_payload: flight,
       });
+      track("FLIGHT_SAVED", `Saved ${flight.airline_name} ${flight.flight_numbers} (${flight.price} ${flight.currency})`, { option_id: flight.option_id });
       setSavedOptionIds((prev) => new Set(prev).add(flight.option_id));
       loadSavedOptions();
       toast.success(`Bookmarked ${flight.airline_name} flight`);
@@ -475,6 +489,7 @@ export default function AiTravelAssistantPage() {
 
   const handleSwapAirports = () => {
     const temp = searchOrigin;
+    track("ROUTE_SWAPPED", `Swapped route to ${searchDestination} → ${searchOrigin}`);
     setSearchOrigin(searchDestination);
     setSearchDestination(temp);
   };
@@ -487,6 +502,12 @@ export default function AiTravelAssistantPage() {
     }
     setIsSearchingFlights(true);
     setHasSearchedFlights(true);
+    const searchStartedAt = performance.now();
+    track(
+      "SEARCH_SUBMITTED",
+      `Searched ${searchOrigin} → ${searchDestination}, ${searchTripType === "round_trip" ? searchDepartureDate + " – " + searchReturnDate : searchDepartureDate}, ${searchAdults} adult${searchAdults > 1 ? "s" : ""}, ${searchCabin}`,
+      { origin: searchOrigin, destination: searchDestination, trip_type: searchTripType, departure_date: searchDepartureDate, return_date: searchTripType === "round_trip" ? searchReturnDate : null, adults: searchAdults, cabin: searchCabin, currency: searchCurrency }
+    );
     try {
       const response = await flightService.searchFlights({
         trip_type: searchTripType,
@@ -506,6 +527,14 @@ export default function AiTravelAssistantPage() {
 
       if (response && response.results) {
         setSearchResults(response.results);
+        const cheapest = response.results.reduce<number | null>((m, f) => (m === null || f.price < m ? f.price : m), null);
+        track(
+          "SEARCH_COMPLETED",
+          response.results.length === 0
+            ? "No flights found"
+            : `${response.results.length} options found, from ${cheapest} ${response.results[0].currency}`,
+          { results: response.results.length, cheapest, duration_ms: Math.round(performance.now() - searchStartedAt) }
+        );
         if (response.results.length === 0) {
           toast.info("No flights found matching your search criteria.");
         } else {
@@ -514,6 +543,7 @@ export default function AiTravelAssistantPage() {
       }
     } catch (err: any) {
       console.error("Flight search failed", err);
+      track("SEARCH_FAILED", `Search failed: ${err?.message ?? "unknown error"}`);
       toast.error("Failed to query live flight prices.");
     } finally {
       setIsSearchingFlights(false);
@@ -523,10 +553,12 @@ export default function AiTravelAssistantPage() {
   const handleQuickFlightPreset = (orig: string, dest: string, name: string) => {
     setSearchOrigin(orig);
     setSearchDestination(dest);
+    track("CRITERIA_CHANGED", `Quick route: ${orig} → ${dest} (${name})`);
     toast.info(`Updated search route to ${orig} → ${dest} (${name})`);
   };
 
   const handleAskBotAboutFlight = (flight: FlightSearchResultItem) => {
+    track("FLIGHT_ANALYZED_WITH_AI", `Asked the assistant about ${flight.airline_name} ${flight.flight_numbers}`, { option_id: flight.option_id });
     setActiveHubTab("chat");
     const prompt = `Analyze this ${flight.airline_name} flight (${flight.flight_numbers}) from ${flight.outbound.origin_airport} to ${flight.outbound.destination_airport} at $${flight.price} ${flight.currency} for ${selectedExecName}. Check corporate travel policy and suggest booking recommendations.`;
     handleSendPrompt(prompt);
@@ -574,7 +606,7 @@ export default function AiTravelAssistantPage() {
               <span>AI Travel Bot</span>
             </button>
             <button
-              onClick={() => setActiveHubTab("explorer")}
+              onClick={() => { setActiveHubTab("explorer"); track("TAB_OPENED", "Opened Flight Explorer"); }}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 activeHubTab === "explorer"
                   ? "bg-card text-foreground shadow-xs font-bold"
@@ -1049,7 +1081,7 @@ export default function AiTravelAssistantPage() {
                 <div className="flex bg-muted/60 p-1 rounded-xl border border-border text-xs shrink-0">
                   <button
                     type="button"
-                    onClick={() => setSearchTripType("round_trip")}
+                    onClick={() => { setSearchTripType("round_trip"); track("CRITERIA_CHANGED", "Trip type: Round trip"); }}
                     className={`px-3 py-1 rounded-lg font-semibold transition-all ${
                       searchTripType === "round_trip"
                         ? "bg-card text-foreground shadow-2xs font-bold"
@@ -1060,7 +1092,7 @@ export default function AiTravelAssistantPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setSearchTripType("one_way")}
+                    onClick={() => { setSearchTripType("one_way"); track("CRITERIA_CHANGED", "Trip type: One way"); }}
                     className={`px-3 py-1 rounded-lg font-semibold transition-all ${
                       searchTripType === "one_way"
                         ? "bg-card text-foreground shadow-2xs font-bold"
@@ -1181,7 +1213,7 @@ export default function AiTravelAssistantPage() {
                       <span className="text-muted-foreground font-medium">Class:</span>
                       <select
                         value={searchCabin}
-                        onChange={(e) => setSearchCabin(e.target.value as any)}
+                        onChange={(e) => { setSearchCabin(e.target.value as any); track("CRITERIA_CHANGED", `Cabin: ${e.target.value}`); }}
                         className="bg-transparent font-semibold text-foreground text-xs focus:outline-hidden cursor-pointer"
                       >
                         <option value="economy">Economy</option>
@@ -1269,7 +1301,10 @@ export default function AiTravelAssistantPage() {
                   {/* Stops Filter */}
                   <select
                     value={searchMaxStops === undefined ? "all" : searchMaxStops}
-                    onChange={(e) => setSearchMaxStops(e.target.value === "all" ? undefined : parseInt(e.target.value, 10))}
+                    onChange={(e) => {
+                      setSearchMaxStops(e.target.value === "all" ? undefined : parseInt(e.target.value, 10));
+                      track("FILTER_CHANGED", `Stops filter: ${e.target.value === "all" ? "any" : "max " + e.target.value}`);
+                    }}
                     className="h-8 rounded-lg border border-input bg-background px-2 text-xs font-medium focus:outline-hidden"
                   >
                     <option value="all">All Stops</option>
@@ -1280,7 +1315,7 @@ export default function AiTravelAssistantPage() {
                   {/* Sort By */}
                   <select
                     value={searchSortBy}
-                    onChange={(e) => setSearchSortBy(e.target.value as any)}
+                    onChange={(e) => { setSearchSortBy(e.target.value as any); track("SORT_CHANGED", `Sorted by ${e.target.value.replace(/_/g, " ")}`); }}
                     className="h-8 rounded-lg border border-input bg-background px-2 text-xs font-medium focus:outline-hidden"
                   >
                     <option value="recommended">Sort: Recommended</option>
@@ -1310,6 +1345,7 @@ export default function AiTravelAssistantPage() {
                             key={flight.option_id || `top-${idx}`}
                             flight={flight}
                             onSelect={handleContinueToBooking}
+                            onToggleDetails={handleToggleDetails}
                             onSave={handleSaveFlight}
                             onAnalyzeWithAi={handleAskBotAboutFlight}
                             isSaved={savedOptionIds.has(flight.option_id)}
@@ -1336,6 +1372,7 @@ export default function AiTravelAssistantPage() {
                             key={flight.option_id || `other-${idx}`}
                             flight={flight}
                             onSelect={handleContinueToBooking}
+                            onToggleDetails={handleToggleDetails}
                             onSave={handleSaveFlight}
                             onAnalyzeWithAi={handleAskBotAboutFlight}
                             isSaved={savedOptionIds.has(flight.option_id)}
@@ -1353,6 +1390,7 @@ export default function AiTravelAssistantPage() {
                       key={flight.option_id || idx}
                       flight={flight}
                       onSelect={handleContinueToBooking}
+                            onToggleDetails={handleToggleDetails}
                       onSave={handleSaveFlight}
                       onAnalyzeWithAi={handleAskBotAboutFlight}
                       isSaved={savedOptionIds.has(flight.option_id)}
@@ -1392,6 +1430,16 @@ export default function AiTravelAssistantPage() {
               </div>
             </Card>
           )}
+
+          <Card className="border-border bg-card rounded-2xl shadow-xs">
+            <CardHeader className="p-4 border-b border-border/80 bg-muted/20">
+              <CardTitle className="text-sm font-bold text-foreground">Your activity</CardTitle>
+              <CardDescription className="text-xs">Every step you take in Flight Explorer, newest first.</CardDescription>
+            </CardHeader>
+            <CardContent className="p-4 max-h-96 overflow-y-auto">
+              <FlightActivityTimeline events={activityEvents} history={activityHistory} />
+            </CardContent>
+          </Card>
         </div>
       )}
 
@@ -1484,6 +1532,7 @@ export default function AiTravelAssistantPage() {
                   onClick={() => {
                     setActiveSession(session);
                     setIsModalOpen(true);
+                    track("SESSION_OPENED", `Opened tracker for ${session.provider_name} (${session.status})`, { session_id: session.id });
                   }}
                   className="p-4 rounded-xl border border-border bg-muted/20 hover:border-primary/40 cursor-pointer transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
                 >

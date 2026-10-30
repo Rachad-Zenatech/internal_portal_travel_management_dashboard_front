@@ -240,3 +240,55 @@
     animation: pop-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 }
+
+/* Travel-provider integration pages: one accent per provider and a light tint on card components (see IntegrationLayout). */
+:root[data-integration] {
+  --primary-foreground: oklch(0.99 0 0);
+  --card: var(--integration-bg);
+}
+:root[data-integration="duffel"] {
+  --primary: oklch(0.55 0.16 240);
+  --ring: oklch(0.65 0.13 240);
+  --integration-bg: oklch(0.975 0.015 237);
+  --integration-border: oklch(0.92 0.03 237);
+  --integration-ink: oklch(0.42 0.11 245);
+}
+:root[data-integration="liteapi"] {
+  --primary: oklch(0.55 0.12 165);
+  --ring: oklch(0.65 0.1 165);
+  --integration-bg: oklch(0.977 0.02 165);
+  --integration-border: oklch(0.92 0.04 165);
+  --integration-ink: oklch(0.4 0.09 165);
+}
+:root[data-integration="sabre"] {
+  --primary: oklch(0.5 0.18 275);
+  --ring: oklch(0.62 0.14 275);
+  --integration-bg: oklch(0.968 0.016 275);
+  --integration-border: oklch(0.92 0.035 275);
+  --integration-ink: oklch(0.4 0.15 275);
+}
+:root.dark[data-integration] {
+  --primary-foreground: oklch(0.18 0.02 260);
+  --card: var(--integration-bg);
+}
+:root.dark[data-integration="duffel"] {
+  --primary: oklch(0.72 0.13 240);
+  --integration-bg: oklch(0.2 0.03 240);
+  --integration-border: oklch(0.3 0.04 240);
+  --integration-ink: oklch(0.88 0.06 240);
+}
+:root.dark[data-integration="liteapi"] {
+  --primary: oklch(0.74 0.12 165);
+  --integration-bg: oklch(0.2 0.03 165);
+  --integration-border: oklch(0.3 0.04 165);
+  --integration-ink: oklch(0.88 0.07 165);
+}
+:root.dark[data-integration="sabre"] {
+  --primary: oklch(0.72 0.14 275);
+  --integration-bg: oklch(0.2 0.03 275);
+  --integration-border: oklch(0.3 0.04 275);
+  --integration-ink: oklch(0.88 0.06 275);
+}
+[data-integration-shell] :is(h1, h2, h3) {
+  color: var(--integration-ink);
+}

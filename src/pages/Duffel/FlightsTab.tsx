@@ -83,6 +83,7 @@ export default function FlightsTab({
   const [form, setForm] = usePersistedState<FormState>("duffel.flights.form", defaultForm);
   const [sessionId, setSessionId] = usePersistedState<string>("duffel.flights.session", "");
   const [results, setResults] = useState<FlightOffer[] | null>(null);
+  const [showTest, setShowTest] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [blocked, setBlocked] = useState<string | null>(accessMessage ?? null);
@@ -95,16 +96,6 @@ export default function FlightsTab({
   const [maxPrice, setMaxPrice] = useState<number | null>(null);
   const [band, setBand] = useState("any");
   const [sort, setSort] = useState<Sort>("price");
-
-  // Return from details / tab switch: restore results from the server-side search session (no supplier call).
-  useEffect(() => {
-    if (!sessionId || results) return;
-    duffelService
-      .getSearchSession(sessionId)
-      .then((s) => (s.expired ? setSessionExpired(true) : setResults(s.results as FlightOffer[])))
-      .catch(() => setSessionId(""));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const set = (patch: Partial<FormState>) => setForm({ ...form, ...patch });
   const travelerCount = form.adults + form.child_ages.length;
@@ -192,20 +183,35 @@ export default function FlightsTab({
     set({ origin: form.destination, originLabel: form.destinationLabel, destination: form.origin, destinationLabel: form.originLabel });
   }
 
+  // Returning to this tab (or back from details) searches Duffel again with the same criteria: saved results are never re-shown.
+  useEffect(() => {
+    if (!sessionId || results) return;
+    if (formError) {
+      setSessionId("");
+      return;
+    }
+    void search();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Duffel's sandbox adds synthetic offers; they are hidden unless the user asks to see them.
+  const testCount = (results ?? []).filter((o) => o.is_test_offer).length;
+  const pool = useMemo(() => (results ?? []).filter((o) => showTest || !o.is_test_offer), [results, showTest]);
+
   // Airlines present in the results, with logos, for the filter chips.
   const airlineOptions = useMemo(() => {
     const m = new Map<string, Carrier>();
-    (results ?? []).forEach((o) => o.slices.forEach((s) => sliceCarriers(s).forEach((c) => c.name && m.set(c.name, c))));
+    pool.forEach((o) => o.slices.forEach((s) => sliceCarriers(s).forEach((c) => c.name && m.set(c.name, c))));
     return Array.from(m.values()).sort((a, b) => (a.name ?? "").localeCompare(b.name ?? ""));
-  }, [results]);
+  }, [pool]);
 
   const priceBounds = useMemo(() => {
-    const v = (results ?? []).map((r) => Number(r.total?.amount ?? 0));
+    const v = pool.map((r) => Number(r.total?.amount ?? 0));
     return v.length ? { min: Math.floor(Math.min(...v)), max: Math.ceil(Math.max(...v)) } : { min: 0, max: 0 };
-  }, [results]);
+  }, [pool]);
 
   const filtered = useMemo(() => {
-    let list = results ?? [];
+    let list = pool;
     if (maxStops !== "any") list = list.filter((o) => o.max_stops <= Number(maxStops));
     if (airlines.length) list = list.filter((o) => o.airlines.some((a) => airlines.includes(a)));
     if (maxPrice != null) list = list.filter((o) => Number(o.total?.amount ?? Infinity) <= maxPrice);
@@ -217,7 +223,7 @@ export default function FlightsTab({
       });
     }
     return list;
-  }, [results, maxStops, airlines, maxPrice, band]);
+  }, [pool, maxStops, airlines, maxPrice, band]);
 
   const shown = useMemo(() => {
     const sorted = [...filtered];
@@ -350,6 +356,13 @@ export default function FlightsTab({
       {/* ------------------------------------------------ results */}
       {results && !loading && (
         <div className="space-y-4">
+          {testCount > 0 && (
+            <Note>
+              Duffel's sandbox adds {testCount} synthetic offer{testCount > 1 ? "s" : ""} to every search: a fake "Duffel Airways" flight and lookalikes
+              that depart at the same time on any route, priced far below the real-looking fares. {showTest ? "They are shown and marked below." : "They are hidden."}{" "}
+              <button type="button" className="font-semibold underline" onClick={() => setShowTest(!showTest)}>{showTest ? "Hide them" : "Show them"}</button>
+            </Note>
+          )}
           {results.length > 0 && best && (
             <div className="grid gap-2 sm:grid-cols-3" role="tablist" aria-label="Sort flights">
               {([
@@ -496,8 +509,9 @@ function FlightCard({ offer, cheapest, fastest, onSelect }: { offer: FlightOffer
     <div className="overflow-hidden rounded-2xl border bg-card shadow-sm transition-shadow hover:shadow-md">
       <div className="flex flex-col md:flex-row">
         <div className="flex-1 space-y-4 p-4">
-          {(cheapest || fastest || refundable) && (
+          {(cheapest || fastest || refundable || offer.is_test_offer) && (
             <div className="flex flex-wrap gap-1.5">
+              {offer.is_test_offer && <Badge className="bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-950 dark:text-fuchsia-300">Duffel test offer</Badge>}
               {cheapest && <Badge className="bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"><BadgeCheck /> Cheapest</Badge>}
               {fastest && <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">Fastest</Badge>}
               {refundable && <Badge variant="secondary">Refundable</Badge>}

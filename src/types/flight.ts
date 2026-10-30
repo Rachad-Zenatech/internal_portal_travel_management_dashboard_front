@@ -150,3 +150,13 @@ export interface FlightBookingSession {
   segments?: FlightSegment[];
   audit_logs?: FlightBookingAuditLog[];
 }
+
+export interface FlightActivityEvent {
+  id: string;
+  event_type: string;
+  summary: string;
+  payload?: Record<string, unknown>;
+  occurred_at: string;
+  /** true for events recorded in the current explorer visit */
+  current?: boolean;
+}

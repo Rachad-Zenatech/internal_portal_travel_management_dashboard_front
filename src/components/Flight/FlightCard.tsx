@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import type { FlightSearchResultItem } from "@/types/flight";
+import { AirlineLogo, getAirlineMeta } from "./AirlineLogo";
 
 export const formatFlightTime = (timeStr: string) => {
   if (!timeStr) return "";
@@ -59,55 +60,7 @@ export const formatFlightDate = (dateStr: string) => {
   return dateStr;
 };
 
-export const getAirlineMeta = (name: string) => {
-  const n = (name || "").toLowerCase();
-  if (n.includes("air canada")) {
-    return {
-      code: "AC",
-      badgeStyle: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30",
-    };
-  }
-  if (n.includes("westjet")) {
-    return {
-      code: "WS",
-      badgeStyle: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/30",
-    };
-  }
-  if (n.includes("porter")) {
-    return {
-      code: "PD",
-      badgeStyle: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30",
-    };
-  }
-  if (n.includes("flair")) {
-    return {
-      code: "F8",
-      badgeStyle: "bg-lime-500/10 text-lime-700 dark:text-lime-400 border-lime-500/30",
-    };
-  }
-  if (n.includes("united")) {
-    return {
-      code: "UA",
-      badgeStyle: "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30",
-    };
-  }
-  if (n.includes("delta")) {
-    return {
-      code: "DL",
-      badgeStyle: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 border-indigo-500/30",
-    };
-  }
-  if (n.includes("american")) {
-    return {
-      code: "AA",
-      badgeStyle: "bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30",
-    };
-  }
-  return {
-    code: name ? name.slice(0, 2).toUpperCase() : "FL",
-    badgeStyle: "bg-primary/10 text-primary border-primary/20",
-  };
-};
+export { getAirlineMeta };
 
 interface FlightCardProps {
   flight: FlightSearchResultItem;
@@ -117,6 +70,7 @@ interface FlightCardProps {
   isSaved?: boolean;
   isCheapest?: boolean;
   compact?: boolean;
+  onToggleDetails?: (flight: FlightSearchResultItem, expanded: boolean) => void;
 }
 
 export function FlightCard({
@@ -127,6 +81,7 @@ export function FlightCard({
   isSaved = false,
   isCheapest = false,
   compact = false,
+  onToggleDetails,
 }: FlightCardProps) {
   const [isExpanded, setIsExpanded] = useState<boolean>(false);
 
@@ -167,13 +122,7 @@ export function FlightCard({
 
               {/* 2. Airline Identity & Flight Number */}
               <div className="flex items-center gap-2.5 w-40 sm:w-44 shrink-0">
-                <div
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0 border shadow-2xs ${
-                    getAirlineMeta(flight.outbound.airline_name).badgeStyle
-                  }`}
-                >
-                  {getAirlineMeta(flight.outbound.airline_name).code}
-                </div>
+                <AirlineLogo airlineName={flight.outbound.airline_name} flightNumber={flight.outbound.flight_numbers} />
                 <div className="min-w-0">
                   <div className="text-xs font-bold text-foreground truncate">
                     {flight.outbound.airline_name}
@@ -256,13 +205,7 @@ export function FlightCard({
 
                 {/* 2. Airline Identity & Flight Number */}
                 <div className="flex items-center gap-2.5 w-40 sm:w-44 shrink-0">
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black shrink-0 border shadow-2xs ${
-                      getAirlineMeta(flight.return_flight.airline_name).badgeStyle
-                    }`}
-                  >
-                    {getAirlineMeta(flight.return_flight.airline_name).code}
-                  </div>
+                  <AirlineLogo airlineName={flight.return_flight.airline_name} flightNumber={flight.return_flight.flight_numbers} />
                   <div className="min-w-0">
                     <div className="text-xs font-bold text-foreground truncate">
                       {flight.return_flight.airline_name}
@@ -432,7 +375,10 @@ export function FlightCard({
         <div className="mt-3.5 pt-2.5 border-t border-border/40 flex items-center justify-between text-xs text-muted-foreground">
           <button
             type="button"
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={() => {
+              onToggleDetails?.(flight, !isExpanded);
+              setIsExpanded(!isExpanded);
+            }}
             className="flex items-center gap-1 hover:text-foreground text-[11px] font-medium"
           >
             <span>{isExpanded ? "Hide Details" : "View Details & Layovers"}</span>
@@ -461,7 +407,8 @@ export function FlightCard({
             {flight.outbound.segments.map((seg, idx) => (
               <div key={idx} className="flex items-start justify-between text-xs pb-2 border-b border-border/40 last:border-0 last:pb-0">
                 <div className="space-y-0.5">
-                  <div className="font-semibold text-foreground">
+                  <div className="font-semibold text-foreground flex items-center gap-1.5">
+                    <AirlineLogo airlineName={seg.marketing_airline} flightNumber={seg.flight_number} size={20} />
                     {seg.marketing_airline} • {seg.flight_number}
                   </div>
                   <div className="text-muted-foreground">
@@ -489,7 +436,8 @@ export function FlightCard({
                 {flight.return_flight.segments.map((seg, idx) => (
                   <div key={idx} className="flex items-start justify-between text-xs pb-2 border-b border-border/40 last:border-0 last:pb-0">
                     <div className="space-y-0.5">
-                      <div className="font-semibold text-foreground">
+                      <div className="font-semibold text-foreground flex items-center gap-1.5">
+                        <AirlineLogo airlineName={seg.marketing_airline} flightNumber={seg.flight_number} size={20} />
                         {seg.marketing_airline} • {seg.flight_number}
                       </div>
                       <div className="text-muted-foreground">

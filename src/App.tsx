@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { lazy, Suspense } from "react";
+import IntegrationLayout from "./components/common/IntegrationLayout";
 import { AuthProvider } from "./lib/AuthContext";
 import { ShieldAlert, ArrowLeft } from "lucide-react";
 import { Button } from "./components/ui/button";
@@ -31,6 +32,12 @@ const DuffelSearchBookPage = lazy(() => import("./pages/Duffel/SearchBookPage"))
 const DuffelMyTripsPage = lazy(() => import("./pages/Duffel/MyTripsPage"));
 const DuffelBookingsPage = lazy(() => import("./pages/Duffel/BookingsPage"));
 const DuffelBookingDetailPage = lazy(() => import("./pages/Duffel/BookingDetailPage"));
+const LiteApiSearchBookPage = lazy(() => import("./pages/LiteApi/SearchBookPage"));
+const LiteApiBookingsPage = lazy(() => import("./pages/LiteApi/BookingsPage"));
+const LiteApiBookingDetailPage = lazy(() => import("./pages/LiteApi/BookingDetailPage"));
+const SabreSearchBookPage = lazy(() => import("./pages/Sabre/SearchBookPage"));
+const SabreBookingsPage = lazy(() => import("./pages/Sabre/BookingsPage"));
+const SabreDiagnosticsPage = lazy(() => import("./pages/Sabre/DiagnosticsPage"));
 
 function NotFoundAlert() {
   return (
@@ -104,11 +111,29 @@ function App() {
               <Route path="/approvals" element={<Navigate to="/travel/approvals" replace />} />
 
               {/* Duffel Integration (flights, hotels, rental cars) */}
-              <Route path="/travel/duffel" element={<Navigate to="/travel/duffel/search" replace />} />
-              <Route path="/travel/duffel/search" element={<DuffelSearchBookPage />} />
-              <Route path="/travel/duffel/trips" element={<DuffelMyTripsPage />} />
-              <Route path="/travel/duffel/bookings" element={<DuffelBookingsPage />} />
-              <Route path="/travel/duffel/bookings/:id" element={<DuffelBookingDetailPage />} />
+              <Route element={<IntegrationLayout accent="duffel" />}>
+                <Route path="/travel/duffel" element={<Navigate to="/travel/duffel/search" replace />} />
+                <Route path="/travel/duffel/search" element={<DuffelSearchBookPage />} />
+                <Route path="/travel/duffel/trips" element={<DuffelMyTripsPage />} />
+                <Route path="/travel/duffel/bookings" element={<DuffelBookingsPage />} />
+                <Route path="/travel/duffel/bookings/:id" element={<DuffelBookingDetailPage />} />
+              </Route>
+
+              {/* LiteAPI Integration (hotels) */}
+              <Route element={<IntegrationLayout accent="liteapi" />}>
+                <Route path="/travel/liteapi" element={<Navigate to="/travel/liteapi/search" replace />} />
+                <Route path="/travel/liteapi/search" element={<LiteApiSearchBookPage />} />
+                <Route path="/travel/liteapi/bookings" element={<LiteApiBookingsPage />} />
+                <Route path="/travel/liteapi/bookings/:id" element={<LiteApiBookingDetailPage />} />
+              </Route>
+
+              {/* Sabre Integration (sandbox flights + internal drafts) */}
+              <Route element={<IntegrationLayout accent="sabre" />}>
+                <Route path="/travel/sabre" element={<Navigate to="/travel/sabre/search" replace />} />
+                <Route path="/travel/sabre/search" element={<SabreSearchBookPage />} />
+                <Route path="/travel/sabre/bookings" element={<SabreBookingsPage />} />
+                <Route path="/travel/sabre/diagnostics" element={<SabreDiagnosticsPage />} />
+              </Route>
 
               {/* Configuration Routes */}
               <Route path="/configuration" element={<Navigate to="/configurations/users" replace />} />
