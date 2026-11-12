@@ -1,0 +1,85 @@
+{
+  "limit": 500,
+  "files": {
+    "src/components/AppShell/TopBar.tsx": {
+      "max_lines": 515,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/components/Flight/BookingTrackerModal.tsx": {
+      "max_lines": 519,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/components/native/index.tsx": {
+      "max_lines": 595,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/data/vehicleCatalog.ts": {
+      "max_lines": 1327,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Configurations/Roles.tsx": {
+      "max_lines": 798,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Configurations/Users.tsx": {
+      "max_lines": 691,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Duffel/FlightsTab.tsx": {
+      "max_lines": 593,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Logs/AuditLog.tsx": {
+      "max_lines": 986,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Logs/SystemLogsPage.tsx": {
+      "max_lines": 1375,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Travel/AiTravelAssistantPage.tsx": {
+      "max_lines": 1593,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Travel/ApprovalsPage.tsx": {
+      "max_lines": 905,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Travel/DroneCargoPage.tsx": {
+      "max_lines": 1068,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Travel/ReceiptExpensePage.tsx": {
+      "max_lines": 3307,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Travel/TravelBudgetPage.tsx": {
+      "max_lines": 746,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Travel/TravelCalendarPage.tsx": {
+      "max_lines": 1374,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Travel/TravelStipendPage.tsx": {
+      "max_lines": 1663,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Travel/TripsEventsPage.tsx": {
+      "max_lines": 1146,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/pages/Travel/VehicleLibraryPage.tsx": {
+      "max_lines": 2064,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/services/travelService.ts": {
+      "max_lines": 510,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    },
+    "src/types/travel.ts": {
+      "max_lines": 1154,
+      "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    }
+  }
+}
