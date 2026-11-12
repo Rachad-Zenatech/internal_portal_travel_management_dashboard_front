@@ -1,5 +1,9 @@
 {
   "limit": 500,
+  "block_limits": {
+    "jsx_return": 80,
+    "py_function": 120
+  },
   "files": {
     "src/components/AppShell/TopBar.tsx": {
       "max_lines": 515,
@@ -80,6 +84,176 @@
     "src/types/travel.ts": {
       "max_lines": 1154,
       "reason": "Over the limit when the check was introduced; split it when you next work on it."
+    }
+  },
+  "blocks": {
+    "src/App.tsx#App": {
+      "max_lines": 224,
+      "kind": "jsx_return"
+    },
+    "src/components/AppShell/ConnectionStatusLight.tsx#ConnectionStatusLight": {
+      "max_lines": 93,
+      "kind": "jsx_return"
+    },
+    "src/components/AppShell/NotificationDropdown.tsx#NotificationDropdownContent": {
+      "max_lines": 112,
+      "kind": "jsx_return"
+    },
+    "src/components/AppShell/Sidebar.tsx#Icon": {
+      "max_lines": 93,
+      "kind": "jsx_return"
+    },
+    "src/components/AppShell/Sidebar.tsx#Sidebar": {
+      "max_lines": 225,
+      "kind": "jsx_return"
+    },
+    "src/components/AppShell/TopBar.tsx#TopBar": {
+      "max_lines": 273,
+      "kind": "jsx_return"
+    },
+    "src/components/Flight/AirportCombobox.tsx#AirportCombobox": {
+      "max_lines": 104,
+      "kind": "jsx_return"
+    },
+    "src/components/Flight/BookingTrackerModal.tsx#BookingTrackerModal": {
+      "max_lines": 379,
+      "kind": "jsx_return"
+    },
+    "src/components/Flight/FlightCard.tsx#FlightCard": {
+      "max_lines": 372,
+      "kind": "jsx_return"
+    },
+    "src/components/ui/autocomplete-combobox.tsx#AutocompleteCombobox": {
+      "max_lines": 111,
+      "kind": "jsx_return"
+    },
+    "src/components/ui/autocomplete-input.tsx#AutocompleteInput": {
+      "max_lines": 124,
+      "kind": "jsx_return"
+    },
+    "src/components/ui/calendar.tsx#Calendar": {
+      "max_lines": 151,
+      "kind": "jsx_return"
+    },
+    "src/components/ui/FloatingVerticalFilter.tsx#FloatingVerticalFilter": {
+      "max_lines": 121,
+      "kind": "jsx_return"
+    },
+    "src/pages/Auth/Login.tsx#Login": {
+      "max_lines": 127,
+      "kind": "jsx_return"
+    },
+    "src/pages/Configurations/RoleApiPermissions.tsx#RoleApiPermissions": {
+      "max_lines": 173,
+      "kind": "jsx_return"
+    },
+    "src/pages/Configurations/RoleGroupPermissions.tsx#RoleGroupPermissions": {
+      "max_lines": 323,
+      "kind": "jsx_return"
+    },
+    "src/pages/Configurations/RoleMcpToolPermissions.tsx#RoleMcpToolPermissions": {
+      "max_lines": 158,
+      "kind": "jsx_return"
+    },
+    "src/pages/Configurations/Roles.tsx#Roles": {
+      "max_lines": 354,
+      "kind": "jsx_return"
+    },
+    "src/pages/Configurations/UserRoleAssignment.tsx#UserRoleAssignment": {
+      "max_lines": 127,
+      "kind": "jsx_return"
+    },
+    "src/pages/Configurations/Users.tsx#Users": {
+      "max_lines": 273,
+      "kind": "jsx_return"
+    },
+    "src/pages/Dashboard/Dashboard.native.tsx#Dashboard": {
+      "max_lines": 99,
+      "kind": "jsx_return"
+    },
+    "src/pages/Dashboard/Dashboard.tsx#Dashboard": {
+      "max_lines": 362,
+      "kind": "jsx_return"
+    },
+    "src/pages/Duffel/BookingDetailPage.tsx#BookingDetailPage": {
+      "max_lines": 150,
+      "kind": "jsx_return"
+    },
+    "src/pages/Duffel/BookingsPage.tsx#BookingsPage": {
+      "max_lines": 85,
+      "kind": "jsx_return"
+    },
+    "src/pages/Duffel/CheckoutDialog.tsx#CheckoutDialog": {
+      "max_lines": 140,
+      "kind": "jsx_return"
+    },
+    "src/pages/Duffel/FlightsTab.tsx#FlightCard": {
+      "max_lines": 85,
+      "kind": "jsx_return"
+    },
+    "src/pages/Duffel/FlightsTab.tsx#FlightsTab": {
+      "max_lines": 182,
+      "kind": "jsx_return"
+    },
+    "src/pages/Logs/AuditLog.tsx#AuditLog": {
+      "max_lines": 389,
+      "kind": "jsx_return"
+    },
+    "src/pages/Logs/SystemLogsPage.tsx#SystemLogsPage": {
+      "max_lines": 935,
+      "kind": "jsx_return"
+    },
+    "src/pages/Sabre/DiagnosticsPage.tsx#DiagnosticsPage": {
+      "max_lines": 151,
+      "kind": "jsx_return"
+    },
+    "src/pages/Sabre/FilterBar.tsx#FilterBar": {
+      "max_lines": 100,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/AiTravelAssistantPage.tsx#AiTravelAssistantPage": {
+      "max_lines": 1027,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/ApprovalsPage.tsx#ApprovalsPage": {
+      "max_lines": 538,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/DroneCargoPage.tsx#DroneCargoPage": {
+      "max_lines": 796,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/ReceiptExpensePage.tsx#CatIcon": {
+      "max_lines": 226,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/ReceiptExpensePage.tsx#ReceiptExpensePage": {
+      "max_lines": 2436,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/TravelBudgetPage.tsx#TravelBudgetPage": {
+      "max_lines": 568,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/TravelCalendarPage.tsx#TravelCalendarPage": {
+      "max_lines": 1038,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/TravelStipendPage.tsx#TravelStipendPage": {
+      "max_lines": 1239,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/TripsEventsPage.tsx#TripsEventsPage": {
+      "max_lines": 874,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/VehicleLibraryPage.tsx#DEDICATED_CHAUFFEURS": {
+      "max_lines": 329,
+      "kind": "jsx_return"
+    },
+    "src/pages/Travel/VehicleLibraryPage.tsx#VehicleLibraryPage": {
+      "max_lines": 1433,
+      "kind": "jsx_return"
     }
   }
 }
