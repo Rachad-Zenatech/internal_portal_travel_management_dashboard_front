@@ -127,7 +127,7 @@ For function and route definitions with their line numbers, grep `.agents/code-m
 - src/pages/Travel/TripsEventsPage.tsx (1147 lines) - trips events page (pages  travel)
 - src/pages/Travel/VehicleLibraryPage.tsx (2065 lines) - vehicle library page (pages  travel)
 - src/services/api.ts (6 lines) - api (services)
-- src/services/apiClient.ts (341 lines) - api client (services)
+- src/services/apiClient.ts (344 lines) - api client (services)
 - src/services/duffelService.ts (93 lines) - duffel service (services)
 - src/services/errorReporting.ts (75 lines) - error reporting (services)
 - src/services/flightService.ts (108 lines) - flight service (services)

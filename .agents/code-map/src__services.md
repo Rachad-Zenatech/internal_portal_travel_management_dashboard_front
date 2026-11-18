@@ -7,7 +7,7 @@ Each symbol shows its start line (`L<n>`); read from there to the next symbol's 
 ## src/services/api.ts (6 lines) - api (services)
 - `getAnnualReport` (export function) L3
 
-## src/services/apiClient.ts (341 lines) - api client (services)
+## src/services/apiClient.ts (344 lines) - api client (services)
 - `ActiveApiAction` (export interface) L5
 - `subscribeToApiActions` (export function) L17
 - `notifyActionListeners` (function) L25
@@ -16,7 +16,7 @@ Each symbol shows its start line (`L<n>`); read from there to the next symbol's 
 - `BASE_URL` (export const) L118
 - `getAuthHeaders` (const) L120
 - `monitoredFetch` (function) L134
-- `apiClient` (export const) L233
+- `apiClient` (export const) L236
 
 ## src/services/duffelService.ts (93 lines) - duffel service (services)
 - `duffelService` (export const) L28 - All Duffel traffic goes through the FastAPI backend; no Duffel credentials or URLs exist in the browser.
