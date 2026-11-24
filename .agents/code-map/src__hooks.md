@@ -4,6 +4,9 @@
 
 Each symbol shows its start line (`L<n>`); read from there to the next symbol's line, not the whole file.
 
+## src/hooks/useAiOverview.ts (16 lines) - use ai overview (hooks)
+- `useAiOverview` (export function) L5
+
 ## src/hooks/useFlightActivity.ts (90 lines) - use flight activity (hooks)
 - `PendingEvent` (interface) L8
 - `useFlightActivity` (export function) L20 - Records every step a user takes in Flight Explorer.

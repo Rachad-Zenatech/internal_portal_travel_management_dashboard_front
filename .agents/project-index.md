@@ -8,11 +8,11 @@ For function and route definitions with their line numbers, grep `.agents/code-m
 - scripts/reload-android.js (82 lines) - reload android
 - scripts/start-android.js (195 lines) - Check ANDROID_HOME or ANDROID_SDK_ROOT environment variables first
 - src/App.native.tsx (81 lines) - app.native
-- src/App.tsx (290 lines) - app
+- src/App.tsx (292 lines) - app
 - src/components/AppShell/AppShell.tsx (52 lines) - Set initial state
 - src/components/AppShell/Breadcrumbs.tsx (141 lines) - breadcrumbs (components  app shell)
 - src/components/AppShell/ConnectionStatusLight.tsx (263 lines) - connection status light (components  app shell)
-- src/components/AppShell/Navigation.tsx (108 lines) - navigation (components  app shell)
+- src/components/AppShell/Navigation.tsx (109 lines) - navigation (components  app shell)
 - src/components/AppShell/NotificationDropdown.tsx (180 lines) - notification dropdown (components  app shell)
 - src/components/AppShell/Sidebar.tsx (340 lines) - sidebar (components  app shell)
 - src/components/AppShell/ThemeSwitch.tsx (41 lines) - theme switch (components  app shell)
@@ -66,6 +66,7 @@ For function and route definitions with their line numbers, grep `.agents/code-m
 - src/components/ui/toggle.tsx (46 lines) - toggle (components ui)
 - src/components/ui/tooltip.tsx (56 lines) - tooltip (components ui)
 - src/data/vehicleCatalog.ts (1328 lines) - vehicle catalog (data)
+- src/hooks/useAiOverview.ts (16 lines) - use ai overview (hooks)
 - src/hooks/useFlightActivity.ts (90 lines) - use flight activity (hooks)
 - src/hooks/useHeartbeat.ts (45 lines) - Track user activity
 - src/hooks/useNotifications.ts (300 lines) - use notifications (hooks)
@@ -81,12 +82,19 @@ For function and route definitions with their line numbers, grep `.agents/code-m
 - src/pages/Auth/Login.tsx (272 lines) - login (pages  auth)
 - src/pages/Auth/PendingAccess.native.tsx (129 lines) - pending access.native (pages  auth)
 - src/pages/Auth/PendingAccess.tsx (62 lines) - If user somehow gets another role, maybe redirect them to home
+- src/pages/Configurations/AiStatusPage.tsx (86 lines) - ai status page (pages  configurations)
 - src/pages/Configurations/RoleApiPermissions.tsx (411 lines) - We order actions so they appear logically: CREATE, READ (VIEW), UPDATE, DELETE
 - src/pages/Configurations/RoleGroupPermissions.tsx (488 lines) - role group permissions (pages  configurations)
 - src/pages/Configurations/RoleMcpToolPermissions.tsx (306 lines) - Left panel search
 - src/pages/Configurations/Roles.tsx (799 lines) - roles (pages  configurations)
 - src/pages/Configurations/UserRoleAssignment.tsx (387 lines) - user role assignment (pages  configurations)
 - src/pages/Configurations/Users.tsx (692 lines) - users (pages  configurations)
+- src/pages/Configurations/aiStatus/AiCoresGrid.tsx (78 lines) - ai cores grid (pages  configurations ai status)
+- src/pages/Configurations/aiStatus/AiErrorsDialog.tsx (110 lines) - ai errors dialog (pages  configurations ai status)
+- src/pages/Configurations/aiStatus/AiFeatureMatrix.tsx (203 lines) - ai feature matrix (pages  configurations ai status)
+- src/pages/Configurations/aiStatus/AiPipelineTelemetry.tsx (179 lines) - ai pipeline telemetry (pages  configurations ai status)
+- src/pages/Configurations/aiStatus/AiSummaryCards.tsx (140 lines) - ai summary cards (pages  configurations ai status)
+- src/pages/Configurations/aiStatus/statusStyles.ts (31 lines) - status styles (pages  configurations ai status)
 - src/pages/Dashboard/Dashboard.native.tsx (258 lines) - dashboard.native (pages  dashboard)
 - src/pages/Dashboard/Dashboard.tsx (423 lines) - dashboard (pages  dashboard)
 - src/pages/Duffel/BookingDetailPage.tsx (315 lines) - booking detail page (pages  duffel)
@@ -137,6 +145,7 @@ For function and route definitions with their line numbers, grep `.agents/code-m
 - src/services/sabreService.ts (37 lines) - All Sabre traffic goes through the FastAPI backend; no Sabre credentials, tokens or URLs exist in the browser.
 - src/services/travelService.ts (511 lines) - travel service (services)
 - src/types/aiAssistant.ts (5 lines) - ai assistant (types)
+- src/types/aiOverview.ts (152 lines) - ai overview (types)
 - src/types/auth.ts (98 lines) - auth (types)
 - src/types/duffel.ts (408 lines) - Application-owned shapes returned by the backend Duffel module (never raw Duffel payloads).
 - src/types/flight.ts (163 lines) - flight (types)

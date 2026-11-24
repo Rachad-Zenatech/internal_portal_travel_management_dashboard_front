@@ -19,10 +19,11 @@ to find the right file.
 | .agents/code-map/src__components__Travel.md | 1 | 1 KB |
 | .agents/code-map/src__components__ui.md | 37 | 8 KB |
 | .agents/code-map/src__data.md | 1 | 1 KB |
-| .agents/code-map/src__hooks.md | 3 | 1 KB |
+| .agents/code-map/src__hooks.md | 4 | 1 KB |
 | .agents/code-map/src__lib.md | 7 | 2 KB |
 | .agents/code-map/src__pages__Auth.md | 4 | 1 KB |
-| .agents/code-map/src__pages__Configurations.md | 6 | 3 KB |
+| .agents/code-map/src__pages__Configurations.md | 7 | 3 KB |
+| .agents/code-map/src__pages__Configurations__aiStatus.md | 6 | 2 KB |
 | .agents/code-map/src__pages__Dashboard.md | 2 | 1 KB |
 | .agents/code-map/src__pages__Duffel.md | 12 | 7 KB |
 | .agents/code-map/src__pages__LiteApi.md | 6 | 2 KB |
@@ -30,5 +31,5 @@ to find the right file.
 | .agents/code-map/src__pages__Sabre.md | 8 | 3 KB |
 | .agents/code-map/src__pages__Travel.md | 9 | 8 KB |
 | .agents/code-map/src__services.md | 10 | 3 KB |
-| .agents/code-map/src__types.md | 9 | 7 KB |
+| .agents/code-map/src__types.md | 10 | 8 KB |
 | .agents/code-map/src__utils.md | 3 | 1 KB |
