@@ -60,6 +60,15 @@ function NotFoundAlert() {
   );
 }
 
+function MainLayout() {
+  return (
+    <ProtectedRoute>
+      <AppShell>
+        <Outlet />
+      </AppShell>
+    </ProtectedRoute>
+  );
+}
 function App() {
   return (
     <AuthProvider>
@@ -71,13 +80,7 @@ function App() {
 
             {/* Main app layout routes */}
             <Route
-              element={
-                <ProtectedRoute>
-                  <AppShell>
-                    <Outlet />
-                  </AppShell>
-                </ProtectedRoute>
-              }
+              element={<MainLayout />}
             >
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route

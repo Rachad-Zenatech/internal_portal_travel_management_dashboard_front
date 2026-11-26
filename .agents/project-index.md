@@ -8,7 +8,7 @@ For function and route definitions with their line numbers, grep `.agents/code-m
 - scripts/reload-android.js (82 lines) - reload android
 - scripts/start-android.js (195 lines) - Check ANDROID_HOME or ANDROID_SDK_ROOT environment variables first
 - src/App.native.tsx (81 lines) - app.native
-- src/App.tsx (292 lines) - app
+- src/App.tsx (295 lines) - app
 - src/components/AppShell/AppShell.tsx (52 lines) - Set initial state
 - src/components/AppShell/Breadcrumbs.tsx (141 lines) - breadcrumbs (components  app shell)
 - src/components/AppShell/ConnectionStatusLight.tsx (263 lines) - connection status light (components  app shell)
